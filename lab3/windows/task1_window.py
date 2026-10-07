@@ -124,7 +124,7 @@ class Task1aWindow:
             for nx in range(x_left, x_right + 1):
                 self.passed_val.add((nx, y))
 
-            self.root.update()  # Обновление для избежания зависаний
+            self.root.update()  
 
             for nx in range(x_left, x_right + 1):
                 fill_scanline(nx, y + 1)
@@ -166,7 +166,9 @@ class Task1bWindow:
         self.height = 600
         self.root.configure(bg=parent.back_ground)
         self.root.title("task1b")
+
         self.canvas = tk.Canvas(self.root, width=self.width, height=self.height)
+
         self.image_path = ""
         self.image = None
 
@@ -202,6 +204,7 @@ class Task1bWindow:
         filename = filedialog.askopenfilename(
             filetypes=[("Image Files", "*.png;*.jpg;*.jpeg;*.gif")]
         )
+
         if filename:
             self.image_path = filename
             self.image = Image.open(self.image_path)
@@ -210,21 +213,36 @@ class Task1bWindow:
         self.canvas.unbind("<B1-Motion>")
         self.canvas.bind("<Button-1>", self.recursive_line_fill)
 
+    # Можно ли закрашивать пиксель
     def check_validity(self, x, y):
-        return(
-                (x, y) not in self.boarders
-                and (x, y) not in self.passed_val
-                and self.width - 2 > x > 0 < y < self.height - 2
+        canvas_width = self.canvas.winfo_width()
+        canvas_height = self.canvas.winfo_height()
+
+        return (
+            (x, y) not in self.boarders
+            and (x, y) not in self.passed_val
+            and 0 < x < canvas_width - 2
+            and 0 < y < canvas_height - 2
         )
 
+    # Получаем цвет пикселя изображения относительно точки клика
+    def get_hex_pixel(self, x, y, start_x, start_y):
+        img_x = (x - start_x + self.image.width // 2) % self.image.width
+        img_y = (y - start_y + self.image.height // 2) % self.image.height
 
-    def get_hex_pixel(self, x, y):
-        r, g, b = self.image.getpixel((x % self.image.width, y % self.image.height))
+        pixel = self.image.getpixel((img_x, img_y))
+        r, g, b = pixel[:3]
+
         return "#{:02x}{:02x}{:02x}".format(r, g, b)
 
     def recursive_line_fill(self, event):
         self.canvas.unbind("<Button-1>")
+
         x, y = event.x, event.y
+
+        # Точка клика внутри области
+        start_x = x
+        start_y = y
 
         if self.image is None:
             print("Загрузите изображение для паттерна")
@@ -244,10 +262,12 @@ class Task1bWindow:
                 x_right += 1
 
             for nx in range(x_left, x_right + 1):
-                img_color = self.get_hex_pixel(nx, y)
-                self.canvas.create_oval(
+                img_color = self.get_hex_pixel(nx, y, start_x, start_y)
+
+                self.canvas.create_rectangle(
                     nx, y, nx + 1, y + 1, fill=img_color, outline=img_color
                 )
+
                 self.passed_val.add((nx, y))
 
             self.root.update()
@@ -257,7 +277,9 @@ class Task1bWindow:
                 fill_scanline(nx, y - 1)
 
         fill_scanline(x, y)
+
         print("Done")
+
         self.canvas.bind("<B1-Motion>", self.paint)
 
     def paint(self, event):
@@ -274,14 +296,9 @@ class Task1bWindow:
         )
 
         for x in range(self.last_x - oval_size // 2, self.last_x + oval_size // 2 + 1):
-            for y in range(
-                self.last_y - oval_size // 2, self.last_y + oval_size // 2 + 1
-            ):
-                if (x - self.last_x) ** 2 + (y - self.last_y) ** 2 <= (
-                    oval_size // 2
-                ) ** 2:
+            for y in range(self.last_y - oval_size // 2, self.last_y + oval_size // 2 + 1):
+                if (x - self.last_x) ** 2 + (y - self.last_y) ** 2 <= (oval_size // 2) ** 2:
                     self.boarders.add((x, y))
-
 
 class Task1cWindow:
     def __init__(self, root: tk.Tk, parent):
@@ -376,7 +393,7 @@ class Task1cWindow:
         else:
             return False
 
-    #Если хоть один сосед имеет другой цвет
+    #Если хоть один сосед имеет другой цвет-граничный
     def is_boundary_pixel(self, x, y, color):
         directions = [(0,1), (1,1), (1,0), (1,-1), (0,-1), (-1,-1), (-1,0), (-1,1)]
         for dx, dy in directions:
@@ -386,7 +403,7 @@ class Task1cWindow:
                 n_color = f"#{r:02x}{g:02x}{b:02x}"
                 if n_color != color:
                     return True
-        return False
+        return False#соседи одного цвета
 
     def boundary_trace(self, event):
         x, y = event.x, event.y
@@ -411,23 +428,23 @@ class Task1cWindow:
         self.passed_val.add((cur_x, cur_y))
         boundary.append((cur_x, cur_y))
 
-        back_dir = 4  # Начальный back - с запада
+        back_dir = 4  # Начальный back - движение вверх
 
-        frames_count = 0
+        frames_count = 0#сколько шагов по границе сделали.
 
         while True:
             found = False
-            start_dir = (back_dir + 2) % 8  # Право от back для clockwise
+            start_dir = (back_dir + 2) % 8 
 
             for i in range(8):
-                d = (start_dir + i) % 8
+                d = (start_dir + i) % 8#номер направления, которое сейчас проверяем.
                 nx = cur_x + directions[d][0]
                 ny = cur_y + directions[d][1]
                 if self.check_validity_and_color_in_range(nx, ny, color) and self.is_boundary_pixel(nx, ny, color):
                     boundary.append((nx, ny))
                     self.passed_val.add((nx, ny))
                     cur_x, cur_y = nx, ny
-                    back_dir = (d + 4) % 8
+                    back_dir = (d + 4) % 8#откуда мы пришли в текущий пиксель
                     found = True
 
                     frames_count += 1

@@ -135,21 +135,17 @@ class Task3Window:
                     messagebox.showerror("Ошибка", f"Пожалуйста, заполните все поля цветов (R, G, B) для цвета {i+1}")
                     return
                 
-                # Проверяем диапазон цветов (0-1 или 0-255)
                 if r > 1 or g > 1 or b > 1:
-                    # Если значения больше 1, нормализуем к диапазону 0-1
                     r, g, b = r/255.0, g/255.0, b/255.0
                 
                 vertex_colors.append([r, g, b])
             
             vertex_colors = np.array(vertex_colors)
 
-            # СОЗДАЕМ ОТДЕЛЬНОЕ ОКНО ДЛЯ ТРЕУГОЛЬНИКА
             triangle_window = tk.Toplevel(self.root)
             triangle_window.title("Градиентный треугольник")
             triangle_window.geometry("500x550+600+100")
             
-            # Создаем фигуру matplotlib
             fig, ax = plt.subplots(figsize=(5, 5), dpi=100)
             
             # Функция для вычисления барицентрических координат

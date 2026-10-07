@@ -72,39 +72,90 @@ class Task2Window:
             color = f"#{int(brightness * 255):02x}{int(brightness * 255):02x}{int(brightness * 255):02x}"
             draw.point((x, y), fill=(0, 0, 0, int(brightness * 255)))
 
+    
+
+    def plot_line_low(self, x0, y0, x1, y1):
+       
+        points = []
+
+        dx = x1 - x0
+        dy = y1 - y0
+
+        yi = 1
+        if dy < 0:
+            yi = -1
+            dy = -dy
+
+        D = 2 * dy - dx
+        y = y0
+
+        for x in range(x0, x1 + 1):
+            points.append((x, y))
+            if D > 0:
+                y += yi
+                D += 2 * (dy - dx)
+            else:
+                D += 2 * dy
+
+        return points
+
+    def plot_line_high(self, x0, y0, x1, y1):
+   
+        points = []
+
+        dx = x1 - x0
+        dy = y1 - y0
+
+        xi = 1
+        if dx < 0:
+            xi = -1
+            dx = -dx
+
+        D = 2 * dx - dy
+        x = x0
+
+        for y in range(y0, y1 + 1):
+            points.append((x, y))
+            if D > 0:
+                x += xi
+                D += 2 * (dx - dy)
+            else:
+                D += 2 * dx
+
+        return points
+
     def bresenham(self, x1, y1, x2, y2):
         points = []
-        dx = abs(x2 - x1)
-        dy = abs(y2 - y1)
-        sx = 1 if x1 < x2 else -1
-        sy = 1 if y1 < y2 else -1
-        err = dx - dy
 
-        while True:
-            points.append((x1, y1))
-            if x1 == x2 and y1 == y2:
-                break
-            err2 = err * 2
-            if err2 > -dy:
-                err -= dy
-                x1 += sx
-            if err2 < dx:
-                err += dx
-                y1 += sy
+        if abs(y2 - y1) < abs(x2 - x1):
+            if x1 > x2:
+                points = self.plot_line_low(x2, y2, x1, y1)
+                points.reverse()
+            else:
+                points = self.plot_line_low(x1, y1, x2, y2)
+        else:
+            if y1 > y2:
+                points = self.plot_line_high(x2, y2, x1, y1)
+                points.reverse()
+            else:
+                points = self.plot_line_high(x1, y1, x2, y2)
+
         return points
+
+    # ---------- Ву ----------
 
     def wu(self, x1, y1, x2, y2):
         points = []
         dx = x2 - x1
         dy = y2 - y1
-        
+
         if dx == 0:
             step = 1 if y1 < y2 else -1
             for y in range(y1, y2 + step, step):
                 brightness = 1.0
                 points.append((x1, y, brightness))
             return points
-        
+
         gradient = dy / dx if dx != 0 else 0
         if abs(dx) > abs(dy):
             if x1 > x2:
@@ -128,6 +179,8 @@ class Task2Window:
                 x += 1 / gradient if gradient != 0 else 0
 
         return points
+
+    # ---------- Служебное ----------
 
     def on_resize(self, event):
         self.draw_segments()
