@@ -225,7 +225,7 @@ class PolygonEditor:
         self.status_label.config(text="Сцена очищена")
         self.message_window.delete(1.0, tk.END)
     
-     def translate(self):
+    def translate(self):
         """Смещение полигона на dx, dy с использованием матрицы переноса"""
         if not self.selected_polygon:
             self.status_label.config(text="Нет выбранного полигона!")
@@ -379,3 +379,201 @@ class PolygonEditor:
         if self.checked_point_oval:
             x1, y1, x2, y2 = self.checked_point_oval
             self.canvas.create_oval(x1, y1, x2, y2, fill="red")
+
+
+    def check_point(self, event):
+        """Проверка принадлежности точки выбранному полигону и классификация"""
+        if not self.selected_polygon:
+            self.message_window.delete(1.0, tk.END)
+            self.message_window.insert(tk.END, "Выберите полигон для проверки\n")
+            return
+
+        x, y = event.x, event.y
+        self.message_window.delete(1.0, tk.END)
+
+        # Визуализация проверяемой точки
+        self.checked_point_oval = (x - 5, y - 5, x + 5, y + 5)
+        self.canvas.create_oval(x - 5, y - 5, x + 5, y + 5, fill="red")
+        self.redraw()
+
+        # Проверка принадлежности точки выбранному полигону
+        if self.is_point_inside_polygon((x, y), self.selected_polygon):
+            self.message_window.insert(tk.END, f"Точка ({x}, {y}) внутри полигона\n")
+        else:
+            self.message_window.insert(tk.END, f"Точка ({x}, {y}) снаружи полигона\n")
+
+        # Классификация положения точки относительно рёбер выбранного полигона
+        if len(self.selected_polygon) >= 2:
+            self.classify_point_position((x, y), self.selected_polygon)
+
+    def is_point_inside_polygon(self, point, polygon):
+        """Проверка принадлежности точки полигону"""
+        x, y = point
+        n = len(polygon)
+        inside = False
+        px, py = polygon[0]
+        for i in range(n + 1):
+            cx, cy = polygon[i % n]
+            if y > min(py, cy):
+                if y <= max(py, cy):
+                    if x <= max(px, cx):
+                        if py != cy:
+                            xinters = (y - py) * (cx - px) / (cy - py) + px
+                        if px == cx or x <= xinters:
+                            inside = not inside
+            px, py = cx, cy
+        return inside
+
+    def classify_point_position(self, point, polygon):
+        """Классификация положения точки относительно рёбер выбранного полигона"""
+        px, py = point
+        for i in range(len(polygon) - 1):
+            x1, y1 = polygon[i]
+            x2, y2 = polygon[i + 1]
+            position = self.get_point_position_relative_to_line(px, py, x1, y1, x2, y2)
+            line_description = f"Точка ({px}, {py}) относительно ребра ({x1}, {y1})-({x2}, {y2}): {position}\n"
+            self.message_window.insert(tk.END, line_description)
+
+    def get_point_position_relative_to_line(self, px, py, x1, y1, x2, y2):
+        """Определение положения точки относительно прямой"""
+        determinant = (x2 - x1) * (py - y1) - (y2 - y1) * (px - x1)
+        if determinant < 0:
+            return "Слева"
+        elif determinant > 0:
+            return "Справа"
+        else:
+            return "На линии"
+
+    def check_polygon_intersections(self):
+        """Проверка пересечений всех рёбер всех полигонов между собой"""
+        self.redraw()
+        self.message_window.delete(1.0, tk.END)
+
+        intersections_found = False
+
+        for i in range(len(self.polygons)):
+            poly1 = self.polygons[i]
+            n1 = len(poly1)
+            if n1 < 2:
+                continue
+
+            for j in range(i, len(self.polygons)):
+                poly2 = self.polygons[j]
+                n2 = len(poly2)
+                if n2 < 2:
+                    continue
+
+                for k in range(n1):
+                    x1, y1 = poly1[k]
+                    x2, y2 = poly1[(k + 1) % n1]
+
+                    for l in range(n2):
+                        if i == j:
+                            if abs(k - l) <= 1 or (k == 0 and l == n1 - 1) or (l == 0 and k == n1 - 1):
+                                continue
+
+                        x3, y3 = poly2[l]
+                        x4, y4 = poly2[(l + 1) % n2]
+
+                        intersection_point = self.get_intersection_point(
+                            (x1, y1), (x2, y2), (x3, y3), (x4, y4)
+                        )
+
+                        if intersection_point:
+                            ix, iy = intersection_point
+                            self.canvas.create_oval(ix - 5, iy - 5, ix + 5, iy + 5, fill="green", width=2)
+                            intersection_info = f"Пересечение:\n"
+                            intersection_info += f"Полигон {i}, ребро {k} - Полигон {j}, ребро {l}\n"
+                            intersection_info += f"Точка: ({ix:.1f}, {iy:.1f})\n\n"
+                            self.message_window.insert(tk.END, intersection_info)
+                            intersections_found = True
+
+        if not intersections_found:
+            self.message_window.insert(tk.END, "Пересечений не найдено\n")
+
+    def get_intersection_point(self, p1, p2, p3, p4):
+        """Нахождение точки пересечения двух отрезков"""
+        x1, y1 = p1
+        x2, y2 = p2
+        x3, y3 = p3
+        x4, y4 = p4
+
+        denominator = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
+        if denominator == 0:
+            return None
+
+        t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denominator
+        u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denominator
+
+        if 0 <= t <= 1 and 0 <= u <= 1:
+            ix = x1 + t * (x2 - x1)
+            iy = y1 + t * (y2 - y1)
+            return ix, iy
+
+        return None
+
+    def start_dynamic_intersection(self):
+        """Начало режима динамического добавления второго ребра"""
+        if not self.selected_polygon or len(self.selected_polygon) != 2:
+            self.message_window.insert(tk.END, "Выберите ребро с ровно 2 точками как первое.\n")
+            return
+        self.status_label.config(text="Кликните для начала второго ребра")
+        self.canvas.bind("<Button-1>", self.set_start_point)
+        self.temp_line = None
+        self.intersection_point = None
+        self.temp_start_oval = None
+
+    def set_start_point(self, event):
+        """Установка начальной точки второго ребра"""
+        self.start_point = (event.x, event.y)
+        self.temp_start_oval = self.canvas.create_oval(event.x - 3, event.y - 3, event.x + 3, event.y + 3, fill="blue")
+        self.status_label.config(text="Двигайте мышь, кликните для фиксации")
+        self.canvas.bind("<Motion>", self.update_temp_line)
+        self.canvas.bind("<Button-1>", self.set_end_point)
+
+    def update_temp_line(self, event):
+        """Обновление временной линии и точки пересечения"""
+        if self.temp_line:
+            self.canvas.delete(self.temp_line)
+        if self.intersection_point:
+            self.canvas.delete(self.intersection_point)
+        x, y = event.x, event.y
+        self.temp_line = self.canvas.create_line(self.start_point[0], self.start_point[1], x, y, fill="blue", dash=(4, 4), width=2)
+        p1 = self.selected_polygon[0]
+        p2 = self.selected_polygon[1]
+        p3 = self.start_point
+        p4 = (x, y)
+        intersect = self.get_intersection_point(p1, p2, p3, p4)
+        if intersect:
+            ix, iy = intersect
+            self.intersection_point = self.canvas.create_oval(ix - 5, iy - 5, ix + 5, iy + 5, fill="red")
+
+    def set_end_point(self, event):
+        """Фиксация конечной точки второго ребра"""
+        x, y = event.x, event.y
+        if self.temp_line:
+            self.canvas.delete(self.temp_line)
+        if self.intersection_point:
+            self.canvas.delete(self.intersection_point)
+        if self.temp_start_oval:
+            self.canvas.delete(self.temp_start_oval)
+        self.canvas.create_oval(self.start_point[0] - 3, self.start_point[1] - 3, self.start_point[0] + 3, self.start_point[1] + 3, fill="black")
+        self.canvas.create_oval(x - 3, y - 3, x + 3, y + 3, fill="black")
+        self.canvas.create_line(self.start_point[0], self.start_point[1], x, y, fill="black", width=2)
+        new_polygon = [self.start_point, (x, y)]
+        self.polygons.append(new_polygon)
+        intersect = self.get_intersection_point(self.selected_polygon[0], self.selected_polygon[1], new_polygon[0], new_polygon[1])
+        if intersect:
+            ix, iy = intersect
+            self.canvas.create_oval(ix - 5, iy - 5, ix + 5, iy + 5, fill="green")
+            self.message_window.insert(tk.END, f"Пересечение в ({ix:.1f}, {iy:.1f})\n")
+        else:
+            self.message_window.insert(tk.END, "Нет пересечения\n")
+        self.canvas.unbind("<Motion>")
+        self.canvas.bind("<Button-1>", self.handle_left_click)
+        self.canvas.bind("<Button-3>", self.check_point)
+        self.status_label.config(text="Выберите действие")
+
+root = tk.Tk()
+app = PolygonEditor(root)
+root.mainloop()
