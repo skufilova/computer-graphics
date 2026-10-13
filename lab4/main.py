@@ -284,11 +284,6 @@ class PolygonEditor:
             transformed_polygon.append((new_p[0], new_p[1]))
 
         self.selected_polygon[:] = transformed_polygon
-        for i, polygon in enumerate(self.polygons):
-            if polygon is self.selected_polygon:
-                self.polygons[i] = self.selected_polygon
-                break
-
         self.redraw()
         angle_degrees = float(self.angle_entry.get() or 0)
         self.status_label.config(text=f"Поворот на {angle_degrees}° вокруг {point_description}")
@@ -326,11 +321,6 @@ class PolygonEditor:
             transformed_polygon.append((new_p[0], new_p[1]))
 
         self.selected_polygon[:] = transformed_polygon
-        for i, polygon in enumerate(self.polygons):
-            if polygon is self.selected_polygon:
-                self.polygons[i] = self.selected_polygon
-                break
-
         self.redraw()
         self.status_label.config(text=f"Масштабирование ({s}x) относительно {point_description}")
 
