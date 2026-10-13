@@ -117,21 +117,8 @@ class PolygonEditor:
 
     def start_creating_polygon(self):
         """Активация режима создания полигона"""
-        if self.is_creating_polygon:
-            return
-
-        self.canvas.unbind("<Motion>")
-        self.start_point = None
-        self.temp_line = None
-        self.intersection_point = None
-        self.temp_start_oval = None
-        self.redraw()
-        self.canvas.bind("<Button-1>", self.handle_left_click)
-        self.canvas.bind("<Button-3>", self.finish_polygon)
-
         self.is_creating_polygon = True
         self.current_polygon = []
-        self.polygons.append(self.current_polygon)
         self.status_label.config(text="Кликните для добавления точек полигона")
 
     def handle_left_click(self, event):
@@ -199,49 +186,45 @@ class PolygonEditor:
                 self.current_polygon[-2], self.current_polygon[-1], fill="black", width=2
             )
 
+        # Добавить в список полигонов
+        if self.current_polygon not in self.polygons:
+            self.polygons.append(self.current_polygon)
+
         self.status_label.config(text=f"Добавлено {len(self.current_polygon)} точек. ПКМ для завершения")
+
+        # Правый клик завершает полигон
+        self.canvas.bind("<Button-3>", self.finish_polygon)
 
     def finish_polygon(self, event):
         """Завершение и автоматическое замыкание полигона"""
         if self.current_polygon:
             if len(self.current_polygon) > 2:
+                # Замыкаем полигон
                 first_point = self.current_polygon[0]
                 last_point = self.current_polygon[-1]
                 self.canvas.create_line(last_point, first_point, fill="black", width=2)
 
+            # Сохраняем полигон и делаем его текущим выбранным
             self.selected_polygon = self.current_polygon
+            self.current_polygon = []
+            self.is_creating_polygon = False
+            self.canvas.bind("<Button-3>", self.check_point)
             self.status_label.config(text=f"Полигон с {len(self.selected_polygon)} вершинами выбран")
-        else:
-            self.polygons.remove(self.current_polygon)
-            self.status_label.config(text="Создание полигона отменено")
-
-        self.current_polygon = []
-        self.is_creating_polygon = False
-        self.canvas.bind("<Button-3>", self.check_point)
-        self.redraw()
+            self.redraw()
 
     def clear_scene(self):
         """Очистка сцены"""
         self.canvas.delete("all")
         self.polygons.clear()
-        self.current_polygon = []
+        self.current_polygon.clear()
         self.selected_polygon = None
         self.is_creating_polygon = False
         self.checked_point_oval = None
-
-        self.start_point = None
-        self.temp_line = None
-        self.intersection_point = None
-        self.temp_start_oval = None
-
-        self.canvas.unbind("<Motion>")
         self.canvas.bind("<Button-1>", self.handle_left_click)
         self.canvas.bind("<Button-3>", self.check_point)
-
         self.status_label.config(text="Сцена очищена")
         self.message_window.delete(1.0, tk.END)
-
-    #2
+    
     def translate(self):
         """Смещение полигона на dx, dy с использованием матрицы переноса"""
         if not self.selected_polygon:
@@ -261,16 +244,9 @@ class PolygonEditor:
         for x, y in self.selected_polygon:
             p = np.array([x, y, 1])
             new_p = translation_matrix @ p
-
             transformed_polygon.append((new_p[0], new_p[1]))
 
         self.selected_polygon[:] = transformed_polygon
-        
-        for i, polygon in enumerate(self.polygons):
-            if polygon is self.selected_polygon:
-                self.polygons[i] = self.selected_polygon
-                break
-
         self.redraw()
         self.status_label.config(text=f"Смещение на ({dx}, {dy}) выполнено")
 
@@ -594,4 +570,3 @@ class PolygonEditor:
 root = tk.Tk()
 app = PolygonEditor(root)
 root.mainloop()
-
