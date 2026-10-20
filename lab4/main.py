@@ -26,7 +26,7 @@ class PolygonEditor:
         # Поля для ввода угла поворота
         self.angle_entry = self.create_labeled_entry(control_frame, "Угол (градусы):")
 
-        # Чекбокс для поворота относительно центра
+        # Флаг 
         self.rotate_center_var = tk.BooleanVar(value=True)
         self.rotate_center_check = tk.Checkbutton(
             control_frame, text="Поворот вокруг центра", variable=self.rotate_center_var
@@ -40,7 +40,7 @@ class PolygonEditor:
         # Масштабирование
         self.scale_entry = self.create_labeled_entry(control_frame, "Коэффициент масштаба:")
 
-        # Чекбокс для масштабирования относительно центра
+        # флаг для масштабирования относительно центра
         self.scale_center_var = tk.BooleanVar(value=True)
         self.scale_center_check = tk.Checkbutton(
             control_frame, text="Масштабирование относительно центра", variable=self.scale_center_var
@@ -62,8 +62,7 @@ class PolygonEditor:
         self.clear_btn = tk.Button(control_frame, text="Очистить сцену", command=self.clear_scene)
         self.clear_btn.pack(fill=tk.X, padx=10, pady=5)
 
-        self.intersections_button = tk.Button(control_frame, text="Пересечения",
-                                              command=self.check_polygon_intersections)
+        self.intersections_button = tk.Button(control_frame, text="Пересечения", command=self.check_polygon_intersections)
         self.intersections_button.pack(fill=tk.X, padx=10, pady=5)
 
         # Новая кнопка для динамического пересечения
@@ -92,8 +91,8 @@ class PolygonEditor:
         self.intersection_point = None
         self.temp_start_oval = None
 
-    def create_labeled_entry(self, parent, label_text):
-        """Функция для создания поля ввода с меткой"""
+     #создание поля ввода с меткой
+    def create_labeled_entry(self, parent, label_text):  
         frame = tk.Frame(parent)
         frame.pack(padx=10, pady=5, fill=tk.X)
         label = tk.Label(frame, text=label_text)
@@ -102,8 +101,8 @@ class PolygonEditor:
         entry.pack(side=tk.RIGHT, fill=tk.X, expand=True)
         return entry
 
+    #Получить координаты точки из полей ввода X и Y, если они не пустые
     def get_input_point(self):
-        """Получить координаты точки из полей ввода X и Y, если они не пустые"""
         x_text = self.x_entry.get()
         y_text = self.y_entry.get()
 
@@ -115,21 +114,21 @@ class PolygonEditor:
                 return None
         return None
 
+    #Активация режима создания полигона
     def start_creating_polygon(self):
-        """Активация режима создания полигона"""
         self.is_creating_polygon = True
         self.current_polygon = []
         self.status_label.config(text="Кликните для добавления точек полигона")
 
+    #Обработка левого клика: выбор полигона или добавление точки
     def handle_left_click(self, event):
-        """Обработка левого клика: выбор полигона или добавление точки"""
         if self.is_creating_polygon:
             self.add_point(event)
         else:
             self.select_polygon(event)
 
+    #Выбор полигона по клику вблизи его вершины или ребра
     def select_polygon(self, event):
-        """Выбор полигона по клику вблизи его вершины или ребра"""
         x, y = event.x, event.y
         closest_polygon = None
         min_distance = float('inf')
@@ -142,7 +141,7 @@ class PolygonEditor:
                     min_distance = distance
                     closest_polygon = polygon
 
-            # Проверяем расстояние до рёбер (для полигонов с ≥2 вершинами)
+            # Проверяем расстояние до рёбер
             if len(polygon) >= 2:
                 for i in range(len(polygon)):
                     x1, y1 = polygon[i]
@@ -161,8 +160,8 @@ class PolygonEditor:
             self.status_label.config(text="Полигон не выбран")
             self.redraw()
 
+    #Вычисление расстояния от точки до отрезка
     def point_to_segment_distance(self, px, py, x1, y1, x2, y2):
-        """Вычисление расстояния от точки до отрезка"""
         length_squared = (x2 - x1) ** 2 + (y2 - y1) ** 2
         if length_squared == 0:
             return ((px - x1) ** 2 + (py - y1) ** 2) ** 0.5
@@ -172,19 +171,17 @@ class PolygonEditor:
         projection_y = y1 + t * (y2 - y1)
         return ((px - projection_x) ** 2 + (py - projection_y) ** 2) ** 0.5
 
+    #Создание полигонов кликами мышью
     def add_point(self, event):
-        """Создание полигонов кликами мышью"""
         x, y = event.x, event.y
         self.current_polygon.append((x, y))
 
-        # Нарисовать вершину
         self.canvas.create_oval(x - 3, y - 3, x + 3, y + 3, fill="black")
 
         # Соединить текущую точку с предыдущей
         if len(self.current_polygon) > 1:
             self.canvas.create_line(
-                self.current_polygon[-2], self.current_polygon[-1], fill="black", width=2
-            )
+                self.current_polygon[-2], self.current_polygon[-1], fill="black", width=2)
 
         # Добавить в список полигонов
         if self.current_polygon not in self.polygons:
@@ -192,19 +189,16 @@ class PolygonEditor:
 
         self.status_label.config(text=f"Добавлено {len(self.current_polygon)} точек. ПКМ для завершения")
 
-        # Правый клик завершает полигон
         self.canvas.bind("<Button-3>", self.finish_polygon)
 
     def finish_polygon(self, event):
-        """Завершение и автоматическое замыкание полигона"""
+        #Завершение и автоматическое замыкание полигона
         if self.current_polygon:
             if len(self.current_polygon) > 2:
-                # Замыкаем полигон
                 first_point = self.current_polygon[0]
                 last_point = self.current_polygon[-1]
                 self.canvas.create_line(last_point, first_point, fill="black", width=2)
 
-            # Сохраняем полигон и делаем его текущим выбранным
             self.selected_polygon = self.current_polygon
             self.current_polygon = []
             self.is_creating_polygon = False
@@ -213,7 +207,7 @@ class PolygonEditor:
             self.redraw()
 
     def clear_scene(self):
-        """Очистка сцены"""
+        #Очистка сцены
         self.canvas.delete("all")
         self.polygons.clear()
         self.current_polygon.clear()
