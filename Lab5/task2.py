@@ -49,7 +49,7 @@ class MountainVisualizer:
             mid_x = (p1[0] + p2[0]) / 2
             mid_y = (p1[1] + p2[1]) / 2
             length = math.sqrt((p2[0] - p1[0]) ** 2 + (p2[1] - p1[1]) ** 2)
-            displacement = random.uniform(-1, 1) * roughness * length
+            displacement = random.uniform(-1, 1) * roughness * length #r- неровность
             mid_y += displacement
 
             new_points.append(p1)

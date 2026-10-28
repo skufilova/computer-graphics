@@ -23,7 +23,7 @@ class PolygonEditor:
         )
         self.translate_btn.pack(fill=tk.X, padx=10, pady=5)
 
-        # Поля для ввода угла поворота
+        # Поля для ввода угла поворота 
         self.angle_entry = self.create_labeled_entry(control_frame, "Угол (градусы):")
 
         # Флаг 
@@ -51,9 +51,7 @@ class PolygonEditor:
         self.scale_btn.pack(fill=tk.X, padx=10, pady=5)
 
         # Поля для ввода точки (для преобразований относительно заданной точки)
-        self.status_label_point = tk.Label(control_frame,
-                                           text="Точка для преобразований\n(если не относительно центра)",
-                                           font=("Arial", 10))
+        self.status_label_point = tk.Label(control_frame, text="Точка для преобразований\n(если не относительно центра)", font=("Arial", 10))
         self.status_label_point.pack(pady=5)
 
         self.x_entry = self.create_labeled_entry(control_frame, "X:")
@@ -192,7 +190,7 @@ class PolygonEditor:
         self.canvas.bind("<Button-3>", self.finish_polygon)
 
     def finish_polygon(self, event):
-        #Завершение и автоматическое замыкание полигона
+        #Завершение и замыкание полигона
         if self.current_polygon:
             if len(self.current_polygon) > 2:
                 first_point = self.current_polygon[0]
@@ -207,7 +205,6 @@ class PolygonEditor:
             self.redraw()
 
     def clear_scene(self):
-        #Очистка сцены
         self.canvas.delete("all")
         self.polygons.clear()
         self.current_polygon.clear()

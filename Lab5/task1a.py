@@ -114,8 +114,9 @@ def instructions_to_points(system, iterations):
         elif ch == "[":
             stack.append((x, y, current_angle))
         elif ch == "]":
-            x, y, current_angle = stack.pop()
-            points.append((x, y))
+            if stack:
+                x, y, current_angle = stack.pop()
+                points.append((x, y))
 
     return points
 
@@ -128,9 +129,8 @@ def draw_points(points, title):
     mx = pts.max(axis=0)
     pts = pts - mn
     span = mx - mn
-    span[span == 0] = 1.0
-    pts = pts / span
-
+    scale = max(span.max(), 1.0)
+    pts = pts / scale
     plt.figure(figsize=(8, 8))
     plt.plot(pts[:, 0], pts[:, 1], color="green", linewidth=1)
     plt.axis("equal")

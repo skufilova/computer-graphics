@@ -1,11 +1,12 @@
+#  X — это главный ствол. B — длинные боковые ветки, а C — мелкие веточки на кончиках
+FFFF[+X][-X][++B][--B] 22 0
 
-# Фрактальное дерево
-X 25 0
-
-X -> F[+X][-X]FX
-F -> FF
+B -> FF[+C][-C]
+C -> F[+C][-C]
+X -> FF[+X][-X][++X][--X]
+F -> F
 
 iterations=5
 seed=42
 name=Fractal Tree
-random_angle=15
+random_angle=4
