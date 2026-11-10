@@ -69,6 +69,7 @@ class SplineEditor:
     def update_curve(self):
         if self.curve:
             self.curve.remove()
+            self.curve = None
 
         if len(self.points) >= 2:
             curve_points = self.calculate_bezier_curve()
