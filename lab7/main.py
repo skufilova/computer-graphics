@@ -269,7 +269,7 @@ def wireframe_2d(ax, P: Polyhedron, proj='perspective', f=1.5):
     x, y = P.projected(M)
     # рисуем ребра
     for a, b in P.edges():
-        ax.plot([x[a], x[b]], [y[a], y[b]], color='tab:blue')
+        ax.plot([x[a], x[b]], [y[a], y[b]])
     ax.set_aspect('equal', 'box')
     ax.set_xlabel('x')
     ax.set_ylabel('y')
@@ -394,9 +394,6 @@ class OBJModel:
 # =========================================================================
 # 2. модель вращения
 # =========================================================================
-
-# Добавьте эту проверку в метод
-
 
 class SurfaceOfRevolution:
     """Класс для создания фигур вращения"""
@@ -671,24 +668,30 @@ class ModelViewer:
                    command=self.reset_view).pack(side=tk.LEFT, expand=True)
 
         # Перенос по координатным осям
+        # Перенос по координатным осям
         move_frame = ttk.Frame(transform_frame)
-        move_frame.pack(fill=tk.X, pady=(0, 5))
-        for text, axis, value in [
-            ("X+", 'x', 0.2), ("X-", 'x', -0.2),
-            ("Y+", 'y', 0.2), ("Y-", 'y', -0.2),
-            ("Z+", 'z', 0.2), ("Z-", 'z', -0.2),
-        ]:
-            ttk.Button(move_frame, text=text,
-                       command=lambda a=axis, v=value: self.translate_model(a, v)).pack(
-                           side=tk.LEFT, expand=True)
+        move_frame.pack(fill=tk.X, pady=(0,3))
 
-        # Отражение относительно координатных плоскостей
-        reflect_frame = ttk.Frame(transform_frame)
-        reflect_frame.pack(fill=tk.X)
-        for plane in ("xy", "yz", "xz"):
-            ttk.Button(reflect_frame, text=f"Отразить {plane.upper()}",
-                       command=lambda p=plane: self.reflect_model(p)).pack(
-                           side=tk.LEFT, expand=True)
+        move_buttons = [
+            ("X+", 'x', 0.2),
+            ("Y+", 'y', 0.2),
+            ("Z+", 'z', 0.2),
+            ("X-", 'x', -0.2),
+            ("Y-", 'y', -0.2),
+            ("Z-", 'z', -0.2),
+        ]
+
+        for i, (text, axis, value) in enumerate(move_buttons):
+            r, c = divmod(i, 3)
+
+            ttk.Button(
+                move_frame,
+                text=text,
+                command=lambda a=axis, v=value: self.translate_model(a, v)
+            ).grid(row=r, column=c, padx=4, pady=3, sticky="ew")
+
+        for c in range(3):
+            move_frame.columnconfigure(c, weight=1)
 
         # Правая панель - отображение
         display_frame = ttk.Frame(main_frame)
@@ -798,14 +801,6 @@ class ModelViewer:
             dy = value if axis == 'y' else 0.0
             dz = value if axis == 'z' else 0.0
             self.current_model.translate(dx, dy, dz)
-            self.plot_model()
-
-    def reflect_model(self, plane):
-            """Отражение модели относительно координатной плоскости."""
-            if self.current_model is None:
-                return
-
-            self.current_model.reflect(plane)
             self.plot_model()
 
     def reset_view(self):
