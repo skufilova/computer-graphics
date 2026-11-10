@@ -203,14 +203,24 @@ class Polyhedron:
         return self.apply(reflect(plane))
 
     def rotate_around_axis_through_center(self, axis: str, angle_deg):
+        """Вращение вокруг оси через центр многогранника."""
         axis = axis.lower()
         c = self.center()
         R = {'x': Rx, 'y': Ry, 'z': Rz}[axis](angle_deg)
-        return self.apply(T(*(-c)) @ R @ T(*c))
+        return self.apply(T(*c) @ R @ T(*(-c)))
 
     def rotate_around_line(self, p1, p2, angle_deg):
         """Поворот вокруг произвольной линии."""
         return self.apply(R_around_line(p1, p2, angle_deg))
+    
+    def rotate_combined(self, axis1, angle1, axis2, angle2):
+        """Последовательный поворот вокруг двух разных осей."""
+        rotations = {'x': Rx, 'y': Ry, 'z': Rz}
+
+        R1 = rotations[axis1](angle1)
+        R2 = rotations[axis2](angle2)
+
+        return self.apply(R2 @ R1)
 
     # --- вспомогательные методы для ребер ---
     def edges(self):
@@ -532,6 +542,37 @@ class App:
         self.angle_entry.pack(side=tk.LEFT, padx=(4,8))
         ttk.Button(trf2, text='Повернуть', command=self.apply_rotate).pack(side=tk.LEFT, padx=6)
         ttk.Button(trf2, text='Повернуть (через центр)', command=self.apply_rotate_center).pack(side=tk.LEFT, padx=6)
+        
+        # Комбинированное вращение
+        trf_combined = ttk.Frame(controls)
+        trf_combined.pack(side=tk.TOP, fill=tk.X, pady=4)
+
+        ttk.Label(trf_combined, text='Комбинированное вращение:').pack(side=tk.LEFT)
+
+        self.axis1_var = tk.StringVar(value='x')
+        ttk.Combobox(
+            trf_combined, textvariable=self.axis1_var,
+            values=['x', 'y', 'z'], state='readonly', width=4
+        ).pack(side=tk.LEFT, padx=5)
+
+        self.angle1_entry = ttk.Entry(trf_combined, width=6)
+        self.angle1_entry.insert(0, '30')
+        self.angle1_entry.pack(side=tk.LEFT, padx=5)
+
+        self.axis2_var = tk.StringVar(value='y')
+        ttk.Combobox(
+            trf_combined, textvariable=self.axis2_var,
+            values=['x', 'y', 'z'], state='readonly', width=4
+        ).pack(side=tk.LEFT, padx=5)
+
+        self.angle2_entry = ttk.Entry(trf_combined, width=6)
+        self.angle2_entry.insert(0, '45')
+        self.angle2_entry.pack(side=tk.LEFT, padx=5)
+
+        ttk.Button(
+            trf_combined, text='Применить',
+            command=self.apply_rotate_combined
+        ).pack(side=tk.LEFT, padx=6)
 
         # Масштаб
         trf3 = ttk.Frame(controls)
@@ -625,6 +666,19 @@ class App:
         axis = (self.rot_axis_var.get() or 'x').lower()
         angle = self._parse_float(self.angle_entry, 0.0)
         self.model.rotate_around_axis_through_center(axis, angle)
+        self.redraw()
+        
+    def apply_rotate_combined(self):
+        axis1 = self.axis1_var.get()
+        axis2 = self.axis2_var.get()
+
+        if axis1 == axis2:
+            return
+
+        angle1 = self._parse_float(self.angle1_entry, 0.0)
+        angle2 = self._parse_float(self.angle2_entry, 0.0)
+
+        self.model.rotate_combined(axis1, angle1, axis2, angle2)
         self.redraw()
 
     def apply_scale(self):
