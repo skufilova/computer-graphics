@@ -118,7 +118,7 @@ def perspective(f=1.5):
     Камера в начале координат смотрит вдоль +Z; точки сцены должны иметь z > 0.
     """
     M = np.eye(4)
-    M[3, 2] = 1.0 / f  # w' = z/f  -> x' = x / (z/f) = f*x/z
+    M[3, 2] = 1.0 / f  # w' = 1 + z/f, затем выполняется деление на w
     return M
 
 
@@ -198,7 +198,7 @@ class Polyhedron:
     def scale_about_center(self, s):
         """Масштабирование относительно центра."""
         c = self.center()
-        return self.apply(T(*(-c)) @ S(s, s, s) @ T(*c))
+        return self.apply(T(*c) @ S(s, s, s) @ T(*(-c)))
 
     def rotate_x(self, angle_deg):
         """Поворот вокруг оси X."""
@@ -221,7 +221,7 @@ class Polyhedron:
         axis = axis.lower()
         c = self.center()
         R = {'x': Rx, 'y': Ry, 'z': Rz}[axis](angle_deg)
-        return self.apply(T(*(-c)) @ R @ T(*c))
+        return self.apply(T(*c) @ R @ T(*(-c)))
 
     def rotate_around_line(self, p1, p2, angle_deg):
         """Поворот вокруг произвольной линии."""
@@ -269,7 +269,7 @@ def wireframe_2d(ax, P: Polyhedron, proj='perspective', f=1.5):
     x, y = P.projected(M)
     # рисуем ребра
     for a, b in P.edges():
-        ax.plot([x[a], x[b]], [y[a], y[b]])
+        ax.plot([x[a], x[b]], [y[a], y[b]], color='tab:blue')
     ax.set_aspect('equal', 'box')
     ax.set_xlabel('x')
     ax.set_ylabel('y')
@@ -414,43 +414,43 @@ class SurfaceOfRevolution:
         vertices = []
         faces = []
 
-        # Простой и понятный способ - создаем вершины вручную
-        for i in range(segments + 1):
-            angle = 2 * math.pi * i / segments  # угол в радианах
+        if segments < 3:
+            raise ValueError("Количество сегментов должно быть не меньше 3")
+        if axis not in ('x', 'y', 'z'):
+            raise ValueError("Ось должна быть x, y или z")
+
+        # Создаем кольца вершин для каждого угла поворота
+        for i in range(segments):
+            angle = 2 * math.pi * i / segments
 
             for radius, height in profile_points:
                 if axis == 'y':
-                    # Вращение вокруг Y: x = r*cos, z = r*sin, y = h
                     x = radius * math.cos(angle)
                     z = radius * math.sin(angle)
                     y = height
-                    vertices.append([x, y, z])
                 elif axis == 'x':
-                    # Вращение вокруг X: y = r*cos, z = r*sin, x = h
                     y = radius * math.cos(angle)
                     z = radius * math.sin(angle)
                     x = height
-                    vertices.append([x, y, z])
-                elif axis == 'z':
-                    # Вращение вокруг Z: x = r*cos, y = r*sin, z = h
+                else:  # axis == 'z'
                     x = radius * math.cos(angle)
                     y = radius * math.sin(angle)
                     z = height
-                    vertices.append([x, y, z])
+
+                vertices.append([x, y, z])
 
         print(f"Создано вершин: {len(vertices)}")
 
-        # Создаем грани
+        # Соединяем соседние кольца треугольными гранями
         profile_len = len(profile_points)
         for i in range(segments):
+            next_i = (i + 1) % segments
             for j in range(profile_len - 1):
-                # Индексы вершин
                 v1 = i * profile_len + j
                 v2 = i * profile_len + (j + 1)
-                v3 = ((i + 1) % (segments + 1)) * profile_len + (j + 1)
-                v4 = ((i + 1) % (segments + 1)) * profile_len + j
+                v3 = next_i * profile_len + (j + 1)
+                v4 = next_i * profile_len + j
 
-                # Два треугольника
                 faces.append([v1, v2, v3])
                 faces.append([v1, v3, v4])
 
@@ -527,6 +527,7 @@ class ModelViewer:
         self.root.geometry("1200x800")
 
         self.current_model = None
+        self.original_model = None
         self.fig = None
         self.ax = None
 
@@ -658,9 +659,9 @@ class ModelViewer:
         for c in range(3):
             rot_buttons_frame.columnconfigure(c, weight=1)
 
-        # Масштабирование и перенос
+        # Масштабирование
         other_frame = ttk.Frame(transform_frame)
-        other_frame.pack(fill=tk.X)
+        other_frame.pack(fill=tk.X, pady=(0, 5))
 
         ttk.Button(other_frame, text="Увеличить",
                    command=lambda: self.scale_model(1.2)).pack(side=tk.LEFT, expand=True)
@@ -668,6 +669,26 @@ class ModelViewer:
                    command=lambda: self.scale_model(0.8)).pack(side=tk.LEFT, expand=True)
         ttk.Button(other_frame, text="Сброс",
                    command=self.reset_view).pack(side=tk.LEFT, expand=True)
+
+        # Перенос по координатным осям
+        move_frame = ttk.Frame(transform_frame)
+        move_frame.pack(fill=tk.X, pady=(0, 5))
+        for text, axis, value in [
+            ("X+", 'x', 0.2), ("X-", 'x', -0.2),
+            ("Y+", 'y', 0.2), ("Y-", 'y', -0.2),
+            ("Z+", 'z', 0.2), ("Z-", 'z', -0.2),
+        ]:
+            ttk.Button(move_frame, text=text,
+                       command=lambda a=axis, v=value: self.translate_model(a, v)).pack(
+                           side=tk.LEFT, expand=True)
+
+        # Отражение относительно координатных плоскостей
+        reflect_frame = ttk.Frame(transform_frame)
+        reflect_frame.pack(fill=tk.X)
+        for plane in ("xy", "yz", "xz"):
+            ttk.Button(reflect_frame, text=f"Отразить {plane.upper()}",
+                       command=lambda p=plane: self.reflect_model(p)).pack(
+                           side=tk.LEFT, expand=True)
 
         # Правая панель - отображение
         display_frame = ttk.Frame(main_frame)
@@ -707,6 +728,7 @@ class ModelViewer:
             obj_model = OBJModel()
             if obj_model.load_from_file(filename):
                 self.current_model = obj_model.polyhedron
+                self.original_model = self.current_model.copy()
                 self.plot_model()
                 messagebox.showinfo("Успех",
                                     f"Модель загружена: {self.current_model.V.shape[1]} вершин, {len(self.current_model.faces)} граней")
@@ -767,11 +789,31 @@ class ModelViewer:
             self.current_model.scale(factor, factor, factor)
             self.plot_model()
 
-    def reset_view(self):
-            """Сброс вида"""
+    def translate_model(self, axis, value):
+            """Перенос модели по выбранной координатной оси."""
             if self.current_model is None:
                 return
 
+            dx = value if axis == 'x' else 0.0
+            dy = value if axis == 'y' else 0.0
+            dz = value if axis == 'z' else 0.0
+            self.current_model.translate(dx, dy, dz)
+            self.plot_model()
+
+    def reflect_model(self, plane):
+            """Отражение модели относительно координатной плоскости."""
+            if self.current_model is None:
+                return
+
+            self.current_model.reflect(plane)
+            self.plot_model()
+
+    def reset_view(self):
+            """Возвращает модель к состоянию после загрузки/создания."""
+            if self.original_model is None:
+                return
+
+            self.current_model = self.original_model.copy()
             self.plot_model()
 
     # =========================================================================
@@ -805,6 +847,7 @@ class ModelViewer:
             self.current_model = SurfaceOfRevolution.create_from_profile(
                 profile_points, axis, segments
             )
+            self.original_model = self.current_model.copy()
 
             self.plot_model()
             messagebox.showinfo("Успех",
@@ -832,6 +875,8 @@ class ModelViewer:
             y_max = float(self.y_max_var.get())
             x_steps = int(self.x_steps_var.get())
             y_steps = int(self.y_steps_var.get())
+            if x_steps < 2 or y_steps < 2:
+                raise ValueError("Количество разбиений по X и Y должно быть не меньше 2")
 
             # Создание функции из строки
             def surface_func(x, y):
@@ -841,6 +886,7 @@ class ModelViewer:
             self.current_model = FunctionSurface.create_surface(
                 surface_func, (x_min, x_max), (y_min, y_max), x_steps, y_steps
             )
+            self.original_model = self.current_model.copy()
 
             self.plot_model()
             messagebox.showinfo("Успех",
