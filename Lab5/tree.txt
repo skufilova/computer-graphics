@@ -5,7 +5,7 @@ X 25 0
 X -> F[+X][-X]FX
 F -> FF
 
-iterations=5
+iterations=7
 seed=42
 name=Fractal Tree
 random_angle=15
