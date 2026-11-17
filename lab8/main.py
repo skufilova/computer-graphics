@@ -38,10 +38,9 @@ class OBJModel:
                     elif parts[0] == 'f':  # грань
                         face = []
                         for part in parts[1:]:
-                            # Обработка формата vertex/texture/normal
                             vertex_index = part.split('/')[0]
                             if vertex_index:
-                                face.append(int(vertex_index) - 1)  # OBJ использует 1-based индексацию
+                                face.append(int(vertex_index) - 1)
                         if len(face) >= 3:
                             faces.append(face)
 
@@ -62,8 +61,6 @@ class OBJModel:
                 file.write("# OBJ файл\n")
                 file.write("# Создан программой визуализации многогранников\n")
 
-                # Запись вершин
-                # Безопасное деление с проверкой на ноль
                 w = self.polyhedron.V[3, :]
                 vertices = np.zeros((3, self.polyhedron.V.shape[1]))
                 for i in range(self.polyhedron.V.shape[1]):
@@ -76,11 +73,10 @@ class OBJModel:
                     vertex = vertices[:, i]
                     file.write(f"v {vertex[0]:.6f} {vertex[1]:.6f} {vertex[2]:.6f}\n")
 
-                # Запись граней
                 for face in self.polyhedron.faces:
                     face_line = "f"
                     for vertex_index in face.indices:
-                        face_line += f" {vertex_index + 1}"  # OBJ использует 1-based индексацию
+                        face_line += f" {vertex_index + 1}"
                     file.write(face_line + "\n")
 
             return True
@@ -189,7 +185,7 @@ def R_around_line(p1, p2, angle_deg):
     p1 = np.asarray(p1, dtype=float)
     p2 = np.asarray(p2, dtype=float)
     axis = p2 - p1
-    R3 = rodrigues_axis_angle(axis, angle_deg)  # 3x3
+    R3 = rodrigues_axis_angle(axis, angle_deg)
     M = np.eye(4)
     M[:3, :3] = R3
     return T(*p1) @ M @ T(*(-p1))
@@ -200,15 +196,10 @@ def R_around_line(p1, p2, angle_deg):
 # --------------------
 
 def perspective(f=1.5):
-    """
-    Простая матрица перспективной проекции.
-    Камера в начале координат смотрит вдоль +Z; точки сцены должны иметь z > 0.
-    """
-    # Важно: хотим w' = z/f (а не 1 + z/f). Для этого элемент (3,3) должен быть 0.
-    # Тогда после дегомогенизации x' = f*x/z, y' = f*y/z.
+    """Простая матрица перспективной проекции (камера смотрит вдоль +Z)."""
     M = np.eye(4)
     M[3, 3] = 0.0
-    M[3, 2] = 1.0 / f  # w' = z/f  -> x' = x / (z/f) = f*x/z
+    M[3, 2] = 1.0 / f
     return M
 
 
@@ -217,17 +208,7 @@ def perspective(f=1.5):
 # --------------------
 
 class Camera:
-    """
-    Класс камеры для 3D визуализации.
-
-    Камера задается:
-    - position: положение камеры в мировых координатах
-    - target: точка, на которую смотрит камера
-    - up: вектор "вверх" камеры
-    - fov: поле зрения (field of view) в градусах
-    - aspect: соотношение сторон (ширина/высота)
-    - near, far: ближняя и дальняя плоскости отсечения
-    """
+    """Класс камеры для 3D визуализации."""
 
     def __init__(self, position=None, target=None, up=None, fov=60.0, aspect=1.0, near=0.1, far=100.0):
         self.position = np.array(position if position is not None else [0.0, 0.0, 5.0])
@@ -238,82 +219,52 @@ class Camera:
         self.near = near
         self.far = far
 
-        # Параметры орбитального вращения
         self.orbit_radius = np.linalg.norm(self.position - self.target)
-        self.orbit_theta = 0.0  # угол по горизонтали (азимут)
-        self.orbit_phi = 0.0  # угол по вертикали (высота)
+        self.orbit_theta = 0.0
+        self.orbit_phi = 0.0
         self._update_orbit_angles()
 
     def _update_orbit_angles(self):
-        """Обновляет углы орбиты на основе текущей позиции."""
         rel_pos = self.position - self.target
         self.orbit_radius = np.linalg.norm(rel_pos)
         if self.orbit_radius > 0:
             rel_pos_norm = rel_pos / self.orbit_radius
-            # phi - угол от горизонтальной плоскости
             self.orbit_phi = np.arcsin(np.clip(rel_pos_norm[1], -1.0, 1.0))
-            # theta - угол в горизонтальной плоскости
             self.orbit_theta = np.arctan2(rel_pos_norm[0], rel_pos_norm[2])
 
     def get_view_direction(self):
-        """Возвращает нормализованный вектор направления обзора (от камеры к цели)."""
-        direction = self.target - self.position
-        return normalize(direction)
+        return normalize(self.target - self.position)
 
     def get_view_matrix(self):
-        """
-        Возвращает матрицу вида (view matrix), которая преобразует мировые координаты
-        в координаты камеры.
-        """
-        # Вектор направления (от камеры к цели)
         forward = normalize(self.target - self.position)
-        # Правый вектор
         right = normalize(np.cross(forward, self.up))
-        # Истинный вектор вверх (перпендикулярен forward и right)
         true_up = np.cross(right, forward)
 
-        # Матрица вращения (переход в систему координат камеры)
         R = np.eye(4)
-        R[0, :3] = right  # ось X камеры
-        R[1, :3] = true_up  # ось Y камеры
-        R[2, :3] = -forward  # В системе камеры смотрим вдоль -Z
+        R[0, :3] = right
+        R[1, :3] = true_up
+        R[2, :3] = -forward
 
-        # Матрица переноса (перемещение мира так, чтобы камера была в начале координат)
         T_mat = T(-self.position[0], -self.position[1], -self.position[2])
-
-        # View matrix = R * T
         return R @ T_mat
 
     def get_projection_matrix(self):
-        """
-        Возвращает матрицу перспективной проекции.
-        Использует упрощенную модель с фокусным расстоянием.
-        """
-        # Вычисляем фокусное расстояние из угла обзора
         f = 1.0 / np.tan(np.radians(self.fov / 2.0))
         M = np.zeros((4, 4), dtype=float)
         M[0, 0] = f / max(self.aspect, 1e-6)
         M[1, 1] = f
         M[2, 2] = -(self.far + self.near) / (self.far - self.near)
         M[2, 3] = -2 * self.far * self.near / (self.far - self.near)
-        M[3, 2] = -1.0  # камера смотрит вдоль -Z
+        M[3, 2] = -1.0
         return M
 
     def orbit_rotate(self, delta_theta, delta_phi):
-        """
-        Вращает камеру вокруг целевой точки (орбитальное вращение).
-
-        delta_theta: изменение азимутального угла (в градусах)
-        delta_phi: изменение угла высоты (в градусах)
-        """
         self.orbit_theta += np.radians(delta_theta)
         self.orbit_phi += np.radians(delta_phi)
 
-        # Ограничиваем угол phi, чтобы избежать переворота
         max_phi = np.radians(89.0)
         self.orbit_phi = np.clip(self.orbit_phi, -max_phi, max_phi)
 
-        # Вычисляем новую позицию на сфере
         x = self.orbit_radius * np.cos(self.orbit_phi) * np.sin(self.orbit_theta)
         y = self.orbit_radius * np.sin(self.orbit_phi)
         z = self.orbit_radius * np.cos(self.orbit_phi) * np.cos(self.orbit_theta)
@@ -321,24 +272,15 @@ class Camera:
         self.position = self.target + np.array([x, y, z])
 
     def zoom(self, delta):
-        """
-        Приближает/отдаляет камеру от цели.
-
-        delta: изменение расстояния (положительное - приближение, отрицательное - отдаление)
-        """
         self.orbit_radius = max(0.5, self.orbit_radius - delta)
-
-        # Обновляем позицию, сохраняя направление
         direction = normalize(self.position - self.target)
         self.position = self.target + direction * self.orbit_radius
 
     def set_target(self, target):
-        """Устанавливает новую целевую точку."""
         self.target = np.array(target)
         self._update_orbit_angles()
 
     def reset(self, position=None, target=None):
-        """Сбрасывает камеру в исходное положение."""
         if position is not None:
             self.position = np.array(position)
         if target is not None:
@@ -354,8 +296,7 @@ def ortho_xy():
 
 
 def isometric_projection_matrix():
-    """Аксонометрическая (изометрическая) проекция = поворот + ортографическая проекция."""
-    # Классическая изометрия: поворот вокруг Z на 45°, затем вокруг X на ~35.264°
+    """Аксонометрическая (изометрическая) проекция."""
     alpha = 35.264389682754654
     beta = 45.0
     R = Rx(alpha) @ Rz(beta)
@@ -385,33 +326,21 @@ class PolygonFace:
 
     def __init__(self, vertex_indices):
         self.indices = list(vertex_indices)
-        self.normal = None  # Вектор нормали грани
+        self.normal = None
 
     def compute_normal(self, vertices, object_center=None):
-        """
-        Вычисляет вектор нормали грани через векторное произведение.
-        Гарантирует, что нормаль направлена наружу от центра объекта.
-
-        vertices: массив 3xN координат вершин (уже в 3D, без однородной координаты)
-        object_center: центр объекта (для определения направления наружу)
-        """
         if len(self.indices) < 3:
             self.normal = np.array([0.0, 0.0, 1.0])
             return
 
-        # Берем первые три вершины грани
         p0 = vertices[:, self.indices[0]]
         p1 = vertices[:, self.indices[1]]
         p2 = vertices[:, self.indices[2]]
 
-        # Два вектора в плоскости грани
         v1 = p1 - p0
         v2 = p2 - p0
-
-        # Векторное произведение дает вектор нормали
         normal = np.cross(v1, v2)
 
-        # Нормализуем
         norm_length = np.linalg.norm(normal)
         if norm_length > 1e-10:
             normal = normal / norm_length
@@ -419,14 +348,9 @@ class PolygonFace:
             self.normal = np.array([0.0, 0.0, 1.0])
             return
 
-        # Проверяем, что нормаль направлена наружу от центра объекта
         if object_center is not None:
-            # Центр грани
             face_center = np.mean(vertices[:, self.indices], axis=1)
-            # Вектор от центра объекта к центру грани
             outward = face_center - object_center
-
-            # Если нормаль направлена внутрь (скалярное произведение < 0), переворачиваем её
             if np.dot(normal, outward) < 0:
                 normal = -normal
 
@@ -437,28 +361,17 @@ class Polyhedron:
     """Класс для представления многогранника."""
 
     def __init__(self, vertices, faces):
-        """
-        vertices: список вершин (кортежи (x,y,z))
-        faces: список граней (списки индексов вершин)
-        """
-        self.V = np.array([to_h(p) for p in vertices], dtype=float).T  # 4xN (столбец = вершина)
+        self.V = np.array([to_h(p) for p in vertices], dtype=float).T
         self.faces = [PolygonFace(f) for f in faces]
         self.compute_face_normals()
 
     def compute_face_normals(self):
-        """Вычисляет нормали для всех граней многогранника."""
-        # Получаем 3D координаты вершин (без однородной координаты)
         vertices_3d = self.V[:3, :] / self.V[3, :]
-
-        # Центр объекта
         center = np.mean(vertices_3d, axis=1)
-
         for face in self.faces:
             face.compute_normal(vertices_3d, center)
 
-    # --- основные методы ---
     def copy(self):
-        """Создает копию многогранника."""
         P = Polyhedron([(0, 0, 0)], [[]])
         P.V = self.V.copy()
         P.faces = [PolygonFace(f.indices.copy()) for f in self.faces]
@@ -466,23 +379,18 @@ class Polyhedron:
         return P
 
     def center(self):
-        """Вычисляет центр многогранника."""
         pts = self.V[:3, :] / self.V[3, :]
         return np.mean(pts, axis=1)
 
     def apply(self, M):
-        """Применяет матричное преобразование 4x4."""
         self.V = M @ self.V
-        self.compute_face_normals()  # Пересчитываем нормали после преобразования
+        self.compute_face_normals()
         return self
 
-    # --- удобные методы преобразований (все через матрицы) ---
     def translate(self, dx, dy, dz):
-        """Перенос (смещение)."""
         return self.apply(T(dx, dy, dz))
 
     def scale(self, sx, sy, sz):
-        """Масштабирование."""
         return self.apply(S(sx, sy, sz))
 
     def scale_about_center(self, s):
@@ -490,19 +398,15 @@ class Polyhedron:
         return self.apply(T(*c) @ S(s, s, s) @ T(*(-c)))
 
     def rotate_x(self, angle_deg):
-        """Поворот вокруг оси X."""
         return self.apply(Rx(angle_deg))
 
     def rotate_y(self, angle_deg):
-        """Поворот вокруг оси Y."""
         return self.apply(Ry(angle_deg))
 
     def rotate_z(self, angle_deg):
-        """Поворот вокруг оси Z."""
         return self.apply(Rz(angle_deg))
 
     def reflect(self, plane: str):
-        """Отражение относительно координатной плоскости."""
         return self.apply(reflect(plane))
 
     def rotate_around_axis_through_center(self, axis: str, angle_deg):
@@ -512,15 +416,11 @@ class Polyhedron:
         return self.apply(T(*c) @ R @ T(*(-c)))
 
     def rotate_around_line(self, p1, p2, angle_deg):
-        """Поворот вокруг произвольной линии."""
         return self.apply(R_around_line(p1, p2, angle_deg))
 
-    # --- вспомогательные методы для ребер ---
     def edges(self):
-        """Вычисляет список ребер многогранника."""
         es = set()
         if self.faces and len(self.faces[0].indices) > 0:
-            # Строим ребра из граней
             for f in self.faces:
                 idx = f.indices
                 for i in range(len(idx)):
@@ -528,23 +428,18 @@ class Polyhedron:
                     b = idx[(i + 1) % len(idx)]
                     es.add(tuple(sorted((a, b))))
         else:
-            # Резервный метод: соединение ближайших соседей
             pts = (self.V[:3, :] / self.V[3, :]).T
             n = len(pts)
             D = np.linalg.norm(pts[None, :, :] - pts[:, None, :], axis=-1)
             for i in range(n):
-                neigh = list(np.argsort(D[i])[1:4])  # 3 ближайших соседа
+                neigh = list(np.argsort(D[i])[1:4])
                 for j in neigh:
                     es.add(tuple(sorted((i, j))))
         return sorted(list(es))
 
-    # --- проекция ---
     def projected(self, matrix4x4):
-        """Возвращает 2D точки (x,y) после применения матрицы проекции."""
         Pv = matrix4x4 @ self.V
-        # Перспективное деление
         Pv = Pv / Pv[3, :]
-        # возвращаем только (x,y)
         return Pv[0, :], Pv[1, :]
 
 
@@ -553,7 +448,6 @@ class Polyhedron:
 # --------------------
 
 def tetrahedron():
-    """Создает правильный тетраэдр с центром в начале координат."""
     V = [(1, 1, 1),
          (1, -1, -1),
          (-1, 1, -1),
@@ -568,40 +462,36 @@ def tetrahedron():
 
 
 def hexahedron():
-    """Правильный гексаэдр (куб) с центром в начале координат и ребром 2."""
     V = [
-        (-1, -1, -1),  # 0
-        (1, -1, -1),  # 1
-        (1, 1, -1),  # 2
-        (-1, 1, -1),  # 3
-        (-1, -1, 1),  # 4
-        (1, -1, 1),  # 5
-        (1, 1, 1),  # 6
-        (-1, 1, 1),  # 7
+        (-1, -1, -1),
+        (1, -1, -1),
+        (1, 1, -1),
+        (-1, 1, -1),
+        (-1, -1, 1),
+        (1, -1, 1),
+        (1, 1, 1),
+        (-1, 1, 1),
     ]
-    # 6 квадратных граней (порядок вершин по контуру)
     F = [
-        [0, 1, 2, 3],  # z = -1 (низ)
-        [4, 5, 6, 7],  # z = +1 (верх)
-        [0, 1, 5, 4],  # y = -1
-        [1, 2, 6, 5],  # x = +1
-        [2, 3, 7, 6],  # y = +1
-        [3, 0, 4, 7],  # x = -1
+        [0, 1, 2, 3],
+        [4, 5, 6, 7],
+        [0, 1, 5, 4],
+        [1, 2, 6, 5],
+        [2, 3, 7, 6],
+        [3, 0, 4, 7],
     ]
     return Polyhedron(V, F)
 
 
 def octahedron():
-    """Правильный октаэдр с центром в начале координат и ребром √2."""
     V = [
-        (1, 0, 0),  # 0
-        (-1, 0, 0),  # 1
-        (0, 1, 0),  # 2
-        (0, -1, 0),  # 3
-        (0, 0, 1),  # 4 (верх)
-        (0, 0, -1),  # 5 (низ)
+        (1, 0, 0),
+        (-1, 0, 0),
+        (0, 1, 0),
+        (0, -1, 0),
+        (0, 0, 1),
+        (0, 0, -1),
     ]
-    # 8 треугольных граней
     F = [
         [4, 0, 2],
         [4, 2, 1],
@@ -615,26 +505,18 @@ def octahedron():
     return Polyhedron(V, F)
 
 
-
 # --------------------
-# Вспомогательные функции для визуализации (2D каркас после проекции)
-# --------------------
-
-# --------------------
-# Tkinter-приложение для отображения каркаса
+# Вспомогательные функции для визуализации
 # --------------------
 
 POLY_BUILDERS = {
     'Тетраэдр': tetrahedron,
     'Гексаэдр (куб)': hexahedron,
     'Октаэдр': octahedron,
-    'Икосаэдр': icosahedron,
-    'Додекаэдр': dodecahedron,
 }
 
 
 def make_poly(name: str) -> Polyhedron:
-    """Создаёт выбранный многогранник без дополнительных поворотов/масштабов."""
     builder = POLY_BUILDERS.get(name)
     if builder is None:
         builder = hexahedron
@@ -642,33 +524,21 @@ def make_poly(name: str) -> Polyhedron:
 
 
 def project_points(P: Polyhedron, proj_mode: str, f: float = 1.8, view_vector=None, cull_backfaces=False, camera=None):
-    """Возвращает 2D проекцию вершин и список рёбер.
-
-    proj_mode: 'perspective' или 'axonometric'/'isometric' или 'camera'
-    camera: объект Camera для режима 'camera'
-    view_vector: вектор направления обзора (3D) - направление ОТ камеры К объекту
-    cull_backfaces: если True, отсекаем нелицевые грани
-    """
+    """Возвращает 2D проекцию вершин и список рёбер."""
     Q = P.copy()
 
-    # Применяем трансформации перед проверкой видимости
     if proj_mode == 'camera' and camera is not None:
-        # Используем матрицу вида камеры
         view_matrix = camera.get_view_matrix()
         Q = Q.apply(view_matrix)
-        # Вектор обзора в системе координат камеры
         if cull_backfaces:
-            view_vector = np.array([0.0, 0.0, -1.0])  # Камера смотрит вдоль -Z в своей системе координат
+            view_vector = np.array([0.0, 0.0, -1.0])
     elif proj_mode == 'perspective':
-        # Стандартная перспектива: сместим модель на z=5
         Q = Q.translate(0, 0, 5.0)
     else:
-        # Для изометрической проекции применяем повороты
         alpha = 35.264389682754654
         beta = 45.0
         Q = Q.apply(Rx(alpha) @ Rz(beta))
 
-    # Определяем видимые грани ПОСЛЕ применения трансформаций
     visible_faces = []
     if cull_backfaces:
         if view_vector is None:
@@ -677,43 +547,33 @@ def project_points(P: Polyhedron, proj_mode: str, f: float = 1.8, view_vector=No
         view_vector = np.asarray(view_vector, dtype=float)
         view_vector = normalize(view_vector)
 
-        # Получаем 3D координаты вершин после трансформаций
         vertices_3d = Q.V[:3, :] / Q.V[3, :]
 
         for face in Q.faces:
             if face.normal is not None:
-                # Берем центр грани
                 face_center = np.mean(vertices_3d[:, face.indices], axis=1)
 
-                # Определяем вектор от камеры к грани
                 if proj_mode in ['perspective', 'camera']:
-                    # Камера в (0,0,0), смотрит вдоль +Z (или -Z в системе камеры)
-                    # Вектор от камеры к грани
                     view_to_face = normalize(face_center)
                 else:
-                    # Для ортографической проекции используем заданный вектор обзора
                     view_to_face = normalize(view_vector)
 
-                # Скалярное произведение нормали (направлена наружу) и направления взгляда
                 dot_product = np.dot(face.normal, view_to_face)
 
-                if dot_product < 0:  # Грань лицевая
+                if dot_product < 0:
                     visible_faces.append(face)
     else:
         visible_faces = Q.faces
 
-    # Теперь применяем проекцию
     if proj_mode == 'camera' and camera is not None:
         M = camera.get_projection_matrix()
     elif proj_mode == 'perspective':
         M = perspective(f)
     else:
-        # Только ортографическая проекция (повороты уже применены)
         M = ortho_xy()
 
     x, y = Q.projected(M)
 
-    # Строим рёбра только из видимых граней
     if cull_backfaces:
         es = set()
         for f in visible_faces:
@@ -730,20 +590,18 @@ def project_points(P: Polyhedron, proj_mode: str, f: float = 1.8, view_vector=No
 
 
 def to_pixels(x, y, width, height, scale=120.0):
-    """Перевод модельных координат в пиксели с фиксированным масштабом и центрированием."""
+    """Перевод модельных координат в пиксели."""
     x = np.asarray(x)
     y = np.asarray(y)
     cx = width * 0.5
     cy = height * 0.5
     Xs = cx + scale * x
-    Ys = cy - scale * y  # переворот оси Y
+    Ys = cy - scale * y
     return Xs, Ys
-
 
 
 # ============================================================================
 # Лабораторная 8 — единое окно для отсечения, Z-буфера и камеры.
-# Геометрия, OBJ и матрицы преобразований взяты из лабораторных 6–7.
 # ============================================================================
 import os
 
@@ -762,7 +620,6 @@ def compute_visible_faces_camera_space(polyhedron, camera, ortho=False):
         if np.linalg.norm(n) < 1e-10:
             continue
         center = np.mean(verts[:, ids], axis=1)
-        # Для выпуклых мешей нормаль дополнительно ориентируется наружу.
         if np.dot(n, center - np.mean(verts, axis=1)) < 0:
             n = -n
         ray = np.array([0., 0., -1.]) if ortho else center
@@ -786,14 +643,14 @@ class Lab8App:
         self.show_edges = tk.BooleanVar(value=False)
         self.auto = tk.BooleanVar(value=False)
         self.use_z = tk.BooleanVar(value=True)
-        self.model_name = tk.StringVar(value='Чайник (OBJ)')
+        self.model_name = tk.StringVar(value='Гексаэдр')
         self.view_xyz = [tk.StringVar(value=v) for v in ('0', '0', '-1')]
         self.step = tk.StringVar(value='15')
         self.axis = tk.StringVar(value='y')
         self.scale_factor = tk.StringVar(value='1.2')
         self.move_xyz = [tk.StringVar(value=v) for v in ('0.2', '0', '0')]
         self.cam_speed = tk.StringVar(value='6')
-        self.line_xyz = [tk.StringVar(value=x) for x in ('0','0','0','0','1','0')]
+        self.line_xyz = [tk.StringVar(value=x) for x in ('0', '0', '0', '0', '1', '0')]
         self.ref_plane = tk.StringVar(value='xy')
         self.show_normals = tk.BooleanVar(value=False)
         self.cam_pos = tk.StringVar()
@@ -803,14 +660,13 @@ class Lab8App:
         self.base_mesh = None
         self.camera = Camera(position=[0, 1.5, 5], target=[0, 0, 0])
         self._create_ui()
-        self.load_preset('Чайник (OBJ)')
+        self.load_preset('Гексаэдр')
         root.after(80, self.render)
         root.protocol('WM_DELETE_WINDOW', self.close)
 
     def _create_ui(self):
         shell = ttk.Frame(self.root)
         shell.pack(fill='both', expand=True)
-        # Ширина левой панели всегда фиксирована. Скролл — только внутри неё.
         sidebar = ttk.Frame(shell, width=270)
         sidebar.pack(side='left', fill='y')
         sidebar.pack_propagate(False)
@@ -823,7 +679,7 @@ class Lab8App:
         window_id = scroll_canvas.create_window((0, 0), window=panel, anchor='nw')
         panel.bind('<Configure>', lambda e: scroll_canvas.configure(scrollregion=scroll_canvas.bbox('all')))
         scroll_canvas.bind('<Configure>', lambda e: scroll_canvas.itemconfig(window_id, width=e.width))
-        scroll_canvas.bind('<MouseWheel>', lambda e: scroll_canvas.yview_scroll(-int(e.delta/120), 'units'))
+        scroll_canvas.bind('<MouseWheel>', lambda e: scroll_canvas.yview_scroll(-int(e.delta / 120), 'units'))
         self.canvas = tk.Canvas(shell, bg='#f7f9fc', highlightthickness=0)
         self.canvas.pack(side='right', fill='both', expand=True)
         self.canvas.bind('<Configure>', lambda e: self.schedule_render())
@@ -836,7 +692,7 @@ class Lab8App:
         f = ttk.LabelFrame(panel, text='Модель / сцена', padding=7)
         f.pack(fill='x', pady=4)
         self.model_box = ttk.Combobox(f, textvariable=self.model_name, state='readonly', width=27,
-            values=['Чайник (OBJ)', 'Куб (OBJ)', 'Шар (OBJ)', 'Гексаэдр', 'Тетраэдр', 'Октаэдр', 'Икосаэдр', 'Додекаэдр', 'Перекрытие кубов', 'Три куба в ряд'])
+            values=['Чайник (OBJ)', 'Куб (OBJ)', 'Шар (OBJ)', 'Гексаэдр', 'Тетраэдр', 'Октаэдр', 'Перекрытие кубов', 'Три куба в ряд'])
         self.model_box.pack(fill='x', pady=3)
         self.model_box.bind('<<ComboboxSelected>>', lambda e: self.load_preset(self.model_name.get()))
         r = ttk.Frame(f); r.pack(fill='x', pady=2)
@@ -897,9 +753,9 @@ class Lab8App:
         ttk.Button(f, text='Переместить', command=self.translate_object).pack(fill='x', pady=3)
         r = ttk.Frame(f); r.pack(fill='x', pady=2)
         ttk.Label(r, text='Отражение').pack(side='left')
-        ttk.Combobox(r, textvariable=self.ref_plane, state='readonly', values=['xy','yz','xz'], width=5).pack(side='left', padx=5)
+        ttk.Combobox(r, textvariable=self.ref_plane, state='readonly', values=['xy', 'yz', 'xz'], width=5).pack(side='left', padx=5)
         ttk.Button(r, text='Применить', command=self.reflect_object).pack(side='left', fill='x', expand=True)
-        ttk.Label(f, text='Ось через две точки: x y z / x y z').pack(anchor='w', pady=(5,1))
+        ttk.Label(f, text='Ось через две точки: x y z / x y z').pack(anchor='w', pady=(5, 1))
         r = ttk.Frame(f); r.pack(fill='x')
         for variable in self.line_xyz:
             ttk.Entry(r, textvariable=variable, width=4).pack(side='left', expand=True, padx=1)
@@ -911,17 +767,19 @@ class Lab8App:
         self.render()
 
     def _parse(self, var, default):
-        try: return float(var.get())
-        except (ValueError, TypeError): return default
+        try:
+            return float(var.get())
+        except (ValueError, TypeError):
+            return default
 
     def _bounds(self):
         pts = np.concatenate([(p.V[:3] / p.V[3]).T for p, col in self.meshes], axis=0)
         lo, hi = pts.min(0), pts.max(0)
-        return (lo+hi)/2, max(float(np.linalg.norm(hi-lo)), .01)
+        return (lo + hi) / 2, max(float(np.linalg.norm(hi - lo)), .01)
 
     def fit_camera(self):
         center, diameter = self._bounds()
-        self.camera.reset(position=center+np.array([diameter*1.05, diameter*.30, diameter*.60]), target=center)
+        self.camera.reset(position=center + np.array([diameter * 1.05, diameter * .30, diameter * .60]), target=center)
         self.update_cam_label()
 
     def load_obj_file(self, path):
@@ -933,10 +791,21 @@ class Lab8App:
     def load_preset(self, name):
         try:
             folder = os.path.dirname(os.path.abspath(__file__))
-            filenames = {'Чайник (OBJ)': 'utah_teapot_lowpoly.obj', 'Куб (OBJ)': 'cube.obj', 'Шар (OBJ)': 'sphere.obj'}
-            builders = {'Гексаэдр': hexahedron, 'Тетраэдр': tetrahedron, 'Октаэдр': octahedron, 'Икосаэдр': icosahedron, 'Додекаэдр': dodecahedron}
+            filenames = {
+                'Чайник (OBJ)': 'utah_teapot_lowpoly.obj',
+                'Куб (OBJ)': 'cube.obj',
+                'Шар (OBJ)': 'sphere.obj',
+            }
+            builders = {
+                'Гексаэдр': hexahedron,
+                'Тетраэдр': tetrahedron,
+                'Октаэдр': octahedron,
+            }
             if name == 'Три куба в ряд':
-                self.meshes = [(hexahedron().scale(.68,.68,.68).translate(x,0,0), color) for x,color in [(-2.,(226,126,137)),(0.,(106,174,217)),(2.,(109,193,146))]]
+                self.meshes = [
+                    (hexahedron().scale(.68, .68, .68).translate(x, 0, 0), color)
+                    for x, color in [(-2., (226, 126, 137)), (0., (106, 174, 217)), (2., (109, 193, 146))]
+                ]
             elif name == 'Перекрытие кубов':
                 self.meshes = [
                     (hexahedron().scale(.83, .83, .83).translate(-.65, 0, -.5), (242, 135, 145)),
@@ -958,13 +827,16 @@ class Lab8App:
 
     def open_obj(self):
         path = filedialog.askopenfilename(filetypes=[('Wavefront OBJ', '*.obj')])
-        if not path: return
+        if not path:
+            return
         try:
             self.meshes = [(self.load_obj_file(path), (119, 174, 234))]
             self.base_mesh = self.meshes[0][0]
             self.model_name.set('Загружена из OBJ')
-            self.fit_camera(); self.render()
-        except Exception as e: messagebox.showerror('Ошибка OBJ', str(e))
+            self.fit_camera()
+            self.render()
+        except Exception as e:
+            messagebox.showerror('Ошибка OBJ', str(e))
 
     def save_obj(self):
         path = filedialog.asksaveasfilename(defaultextension='.obj', filetypes=[('Wavefront OBJ', '*.obj')])
@@ -973,31 +845,39 @@ class Lab8App:
                 messagebox.showerror('Ошибка', 'Не удалось сохранить OBJ')
 
     def update_cam_label(self):
-        self.cam_pos.set('Позиция: '+', '.join(f'{x:.2f}' for x in self.camera.position)+'\nЦель: '+', '.join(f'{x:.2f}' for x in self.camera.target))
+        self.cam_pos.set('Позиция: ' + ', '.join(f'{x:.2f}' for x in self.camera.position) +
+                         '\nЦель: ' + ', '.join(f'{x:.2f}' for x in self.camera.target))
 
     def orbit(self, azimuth, elevation):
         self.camera.orbit_rotate(azimuth, elevation)
-        self.update_cam_label(); self.render()
+        self.update_cam_label()
+        self.render()
 
     def camera_zoom(self, d):
         radius = self.camera.orbit_radius
-        self.camera.zoom(d*radius*.12)
-        self.update_cam_label(); self.render()
+        self.camera.zoom(d * radius * .12)
+        self.update_cam_label()
+        self.render()
 
-    def reset_camera(self): self.fit_camera(); self.render()
+    def reset_camera(self):
+        self.fit_camera()
+        self.render()
 
-    def start_drag(self, e): self.drag = (e.x, e.y)
+    def start_drag(self, e):
+        self.drag = (e.x, e.y)
 
     def drag_camera(self, e):
         if self.drag:
-            dx, dy = e.x-self.drag[0], e.y-self.drag[1]
+            dx, dy = e.x - self.drag[0], e.y - self.drag[1]
             self.drag = (e.x, e.y)
-            self.orbit(-dx*.45, dy*.45)
+            self.orbit(-dx * .45, dy * .45)
 
     def toggle_auto(self):
-        if self.auto.get() and self.timer is None: self.animate()
+        if self.auto.get() and self.timer is None:
+            self.animate()
         if not self.auto.get() and self.timer is not None:
-            self.root.after_cancel(self.timer); self.timer = None
+            self.root.after_cancel(self.timer)
+            self.timer = None
 
     def animate(self):
         self.timer = None
@@ -1006,19 +886,23 @@ class Lab8App:
             self.timer = self.root.after(65, self.animate)
 
     def close(self):
-        if self.timer is not None: self.root.after_cancel(self.timer)
+        if self.timer is not None:
+            self.root.after_cancel(self.timer)
         self.root.destroy()
 
     def set_view_vector(self):
         try:
             v = np.array([float(s.get()) for s in self.view_xyz])
-            if np.linalg.norm(v) < 1e-8: raise ValueError
+            if np.linalg.norm(v) < 1e-8:
+                raise ValueError
             v = normalize(v)
             center, dia = self._bounds()
-            # Вектор задаёт направление ОТ камеры К объекту.
-            self.camera.reset(position=center-v*dia*1.7, target=center)
-            self.proj.set('parallel'); self.render(); self.update_cam_label()
-        except ValueError: messagebox.showwarning('Вектор обзора', 'Задайте ненулевой числовой вектор')
+            self.camera.reset(position=center - v * dia * 1.7, target=center)
+            self.proj.set('parallel')
+            self.render()
+            self.update_cam_label()
+        except ValueError:
+            messagebox.showwarning('Вектор обзора', 'Задайте ненулевой числовой вектор')
 
     def rotate_object(self):
         angle = self._parse(self.step, 15.)
@@ -1028,18 +912,21 @@ class Lab8App:
 
     def scale_object(self):
         k = self._parse(self.scale_factor, 1.2)
-        if k <= 0: return
+        if k <= 0:
+            return
         for model, _ in self.meshes:
             model.scale_about_center(k)
         self.render()
 
     def translate_object(self):
         vec = [self._parse(t, 0.) for t in self.move_xyz]
-        for model, _ in self.meshes: model.translate(*vec)
+        for model, _ in self.meshes:
+            model.translate(*vec)
         self.render()
 
     def reflect_object(self):
-        for model, _ in self.meshes: model.reflect(self.ref_plane.get())
+        for model, _ in self.meshes:
+            model.reflect(self.ref_plane.get())
         self.render()
 
     def rotate_around_line(self):
@@ -1063,22 +950,22 @@ class Lab8App:
         self.render()
 
     def render(self):
-        if not self.meshes: return
+        if not self.meshes:
+            return
         width, height = self.canvas.winfo_width(), self.canvas.winfo_height()
-        if width < 15 or height < 15: return
+        if width < 15 or height < 15:
+            return
         self.camera.aspect = width / height
         if self.mode.get() == 'camera' and self.proj.get() != 'perspective':
             self.proj.set('perspective')
         perspective_mode = self.proj.get() == 'perspective'
         view = self.camera.get_view_matrix()
         mode = self.mode.get()
-        # Отсечение включается в специальном режиме независимо от чекбокса.
         culling = self.cull.get() or mode == 'culling'
         wire = mode in ('wire', 'culling')
-        # Ограничение размеров буфера для комфортной работы на CPU.
         limit = 1000
         factor = min(1., limit / max(width, height))
-        w, h = max(1,int(width*factor)), max(1,int(height*factor))
+        w, h = max(1, int(width * factor)), max(1, int(height * factor))
         rgb, depth_buffer = clear_buffers(w, h)
         wire_segments = []
         self._normal_lines = []
@@ -1087,7 +974,6 @@ class Lab8App:
             Vcam = view @ obj.V
             cam = Vcam[:3] / Vcam[3]
             z = -cam[2]
-            # Перспектива по матрице камеры; параллельная — единый масштаб в мировых единицах.
             if perspective_mode:
                 projected = self.camera.get_projection_matrix() @ Vcam
                 wcoord = projected[3]
@@ -1096,70 +982,74 @@ class Lab8App:
                 ndcy = np.divide(projected[1], wcoord, out=np.zeros_like(wcoord), where=valid)
             else:
                 _, dia = self._bounds()
-                ortho_half_h = max(dia*.72, 0.1)
-                ndcx = cam[0] / (ortho_half_h*self.camera.aspect)
+                ortho_half_h = max(dia * .72, 0.1)
+                ndcx = cam[0] / (ortho_half_h * self.camera.aspect)
                 ndcy = cam[1] / ortho_half_h
                 valid = z > self.camera.near
-            screen = np.column_stack(((ndcx+1)*w*.5, (1-ndcy)*h*.5))
+            screen = np.column_stack(((ndcx + 1) * w * .5, (1 - ndcy) * h * .5))
             for face in obj.faces:
                 ids = face.indices
-                if len(ids) < 3 or not np.all(valid[ids]): continue
+                if len(ids) < 3 or not np.all(valid[ids]):
+                    continue
                 n = view[:3, :3] @ face.normal
                 norm = np.linalg.norm(n)
-                if norm < 1e-10: continue
+                if norm < 1e-10:
+                    continue
                 n /= norm
                 center = np.mean(cam[:, ids], axis=1)
-                facing = np.dot(n, np.array([0.,0.,-1.]) if not perspective_mode else center) < 0
-                if culling and not facing: continue
+                facing = np.dot(n, np.array([0., 0., -1.]) if not perspective_mode else center) < 0
+                if culling and not facing:
+                    continue
                 if self.show_normals.get() and facing:
                     normal_length = max(self._bounds()[1] * .09, .05)
                     endpoint = center + n * normal_length
                     if perspective_mode:
                         pp = self.camera.get_projection_matrix() @ np.array([*endpoint, 1.])
                         if pp[3] > self.camera.near:
-                            end_xy = np.array([(pp[0]/pp[3]+1)*w*.5, (1-pp[1]/pp[3])*h*.5])
+                            end_xy = np.array([(pp[0] / pp[3] + 1) * w * .5, (1 - pp[1] / pp[3]) * h * .5])
                         else:
                             end_xy = None
                     else:
-                        end_xy = np.array([(endpoint[0]/(ortho_half_h*self.camera.aspect)+1)*w*.5,
-                                           (1-endpoint[1]/ortho_half_h)*h*.5])
+                        end_xy = np.array([(endpoint[0] / (ortho_half_h * self.camera.aspect) + 1) * w * .5,
+                                           (1 - endpoint[1] / ortho_half_h) * h * .5])
                     if end_xy is not None:
                         pc = np.mean(screen[ids], axis=0)
                         self._normal_lines.append((pc.copy(), end_xy))
                 if wire:
                     for j in range(len(ids)):
-                        p0, p1 = screen[ids[j]], screen[ids[(j+1) % len(ids)]]
+                        p0, p1 = screen[ids[j]], screen[ids[(j + 1) % len(ids)]]
                         wire_segments.append((p0, p1))
                     continue
-                # Плоское простое затенение для наглядности формы.
                 light = normalize(np.array([-.5, .8, 1.]))
-                intensity = .45 + .55*max(0., np.dot(n, light))
-                shade = np.array([int(min(255, x*intensity)) for x in base_color], dtype=np.uint8)
-                for j in range(1, len(ids)-1):
-                    tri = [ids[0], ids[j], ids[j+1]]
+                intensity = .45 + .55 * max(0., np.dot(n, light))
+                shade = np.array([int(min(255, x * intensity)) for x in base_color], dtype=np.uint8)
+                for j in range(1, len(ids) - 1):
+                    tri = [ids[0], ids[j], ids[j + 1]]
                     raster_triangle(screen[tri], z[tri], shade, rgb, depth_buffer,
                                     ztest=self.use_z.get())
                 if self.show_edges.get():
                     for j in range(len(ids)):
-                        wire_segments.append((screen[ids[j]], screen[ids[(j+1)%len(ids)]]))
+                        wire_segments.append((screen[ids[j]], screen[ids[(j + 1) % len(ids)]]))
         self.canvas.delete('all')
         if not wire:
-            # PPM поддерживается обычным Tkinter, Pillow не требуется.
             header = f'P6 {w} {h} 255\n'.encode('ascii')
-            photo = tk.PhotoImage(data=header+rgb.tobytes(), format='PPM')
+            photo = tk.PhotoImage(data=header + rgb.tobytes(), format='PPM')
             self.canvas.image = photo
-            self.canvas.create_image(width/2, height/2, image=photo)
+            self.canvas.create_image(width / 2, height / 2, image=photo)
         else:
             self.canvas.configure(bg='#f7f9fc')
-        if not wire: self.canvas.configure(bg='#f7f9fc')
+        if not wire:
+            self.canvas.configure(bg='#f7f9fc')
         for p0, p1 in wire_segments:
-            self.canvas.create_line(p0[0]/factor, p0[1]/factor, p1[0]/factor, p1[1]/factor,
+            self.canvas.create_line(p0[0] / factor, p0[1] / factor, p1[0] / factor, p1[1] / factor,
                                     fill='#277cc0' if wire else '#506879', width=1)
         for p0, p1 in self._normal_lines:
-            self.canvas.create_line(p0[0]/factor, p0[1]/factor, p1[0]/factor, p1[1]/factor, fill='#e36c35', width=2, arrow='last')
-        modes = {'wire':'Каркас', 'culling':'Отсечение граней', 'zbuffer':'Z-буфер', 'camera':'Камера'}
+            self.canvas.create_line(p0[0] / factor, p0[1] / factor, p1[0] / factor, p1[1] / factor,
+                                    fill='#e36c35', width=2, arrow='last')
+        modes = {'wire': 'Каркас', 'culling': 'Отсечение граней', 'zbuffer': 'Z-буфер', 'camera': 'Камера'}
         self.canvas.create_text(16, 15, anchor='nw', fill='#64748b',
-                                text=f'{self.model_name.get()}   |   {"Перспектива" if perspective_mode else "Параллельная"}   |   {modes[mode]}', font=('Arial', 11))
+                                text=f'{self.model_name.get()}   |   {"Перспектива" if perspective_mode else "Параллельная"}   |   {modes[mode]}',
+                                font=('Arial', 11))
 
 
 def main():
