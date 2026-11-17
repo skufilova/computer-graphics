@@ -1004,12 +1004,15 @@ class Lab8App:
                     normal_length = max(self._bounds()[1] * .09, .05)
                     endpoint = center + n * normal_length
                     if perspective_mode:
+                    # # Перспективная: умножаем точку на матрицу проекции
                         pp = self.camera.get_projection_matrix() @ np.array([*endpoint, 1.])
-                        if pp[3] > self.camera.near:
+                        if pp[3] > self.camera.near: # # точка перед камерой?
+                        # # Делим на w (перспективное деление) → переводим в пиксели
                             end_xy = np.array([(pp[0] / pp[3] + 1) * w * .5, (1 - pp[1] / pp[3]) * h * .5])
                         else:
                             end_xy = None
                     else:
+                        # # Параллельная проекция: просто масштабируем 
                         end_xy = np.array([(endpoint[0] / (ortho_half_h * self.camera.aspect) + 1) * w * .5,
                                            (1 - endpoint[1] / ortho_half_h) * h * .5])
                     if end_xy is not None:
@@ -1043,6 +1046,7 @@ class Lab8App:
         for p0, p1 in wire_segments:
             self.canvas.create_line(p0[0] / factor, p0[1] / factor, p1[0] / factor, p1[1] / factor,
                                     fill='#277cc0' if wire else '#506879', width=1)
+        #Отрисовка стрелок нормалей
         for p0, p1 in self._normal_lines:
             self.canvas.create_line(p0[0] / factor, p0[1] / factor, p1[0] / factor, p1[1] / factor,
                                     fill='#e36c35', width=2, arrow='last')
