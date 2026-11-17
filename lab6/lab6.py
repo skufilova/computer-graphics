@@ -27,16 +27,16 @@ def normalize(v):
 # --------------------
 
 def T(dx, dy, dz):
-    """Матрица переноса (смещения)."""
-    M = np.eye(4)
-    M[:3, 3] = [dx, dy, dz]
-    return M
+    """Создаём матрицу переноса 4x4."""
+    M = np.eye(4)                       # Единичная матрица
+    M[:3, 3] = [dx, dy, dz]             # Записываем смещение по X, Y, Z
+    return M                           # Возвращаем матрицу
 
 def S(sx, sy, sz):
-    """Матрица масштабирования."""
-    M = np.eye(4)
-    M[0,0], M[1,1], M[2,2] = sx, sy, sz
-    return M
+    """Создаём матрицу масштабирования 4x4."""
+    M = np.eye(4)                             # Единичная матрица
+    M[0,0], M[1,1], M[2,2] = sx, sy, sz       # Коэффициенты по осям
+    return M                                 # Возвращаем матрицу
 
 def Rx(angle_deg):
     """Матрица поворота вокруг оси X."""
@@ -66,14 +66,14 @@ def Rz(angle_deg):
     return M
 
 def reflect(plane: str):
-    """Отражение относительно координатной плоскости: 'xy', 'yz', или 'xz'."""
-    plane = plane.lower()
+    """Создаём матрицу отражения."""
+    plane = plane.lower()       # Переводим название плоскости в нижний регистр
     if plane == "xy":
-        return S(1, 1, -1)
+        return S(1, 1, -1)      # Меняем знак Z
     if plane == "yz":
-        return S(-1, 1, 1)
+        return S(-1, 1, 1)      # Меняем знак X
     if plane == "xz":
-        return S(1, -1, 1)
+        return S(1, -1, 1)      # Меняем знак Y
     raise ValueError("Плоскость должна быть: 'xy', 'yz', 'xz'")
 
 def rodrigues_axis_angle(axis, angle_deg):
@@ -175,16 +175,17 @@ class Polyhedron:
 
     # --- удобные методы преобразований (все через матрицы) ---
     def translate(self, dx, dy, dz):
-        """Перенос (смещение)."""
-        return self.apply(T(dx, dy, dz))
+        """Перемещаем многогранник."""
+        return self.apply(T(dx, dy, dz))  # Применяем матрицу переноса
 
     def scale(self, sx, sy, sz):
         """Масштабирование."""
         return self.apply(S(sx, sy, sz))
 
     def scale_about_center(self, s):
-        c = self.center()
-        return self.apply(T(*(-c)) @ S(s, s, s) @ T(*c))
+        c = self.center()  # Находим центр фигуры
+        # Переносим центр в начало координат, масштабируем и возвращаем обратно
+        return self.apply(T(*c) @ S(s, s, s) @ T(*(-c)))
 
     def rotate_x(self, angle_deg):
         """Поворот вокруг оси X."""
@@ -199,8 +200,8 @@ class Polyhedron:
         return self.apply(Rz(angle_deg))
 
     def reflect(self, plane: str):
-        """Отражение относительно координатной плоскости."""
-        return self.apply(reflect(plane))
+        """Отражаем многогранник относительно выбранной плоскости."""
+        return self.apply(reflect(plane))  # Применяем матрицу отражения
 
     def rotate_around_axis_through_center(self, axis: str, angle_deg):
         """Вращение вокруг оси через центр многогранника."""
