@@ -229,36 +229,36 @@ class Camera:
         self.orbit_radius = np.linalg.norm(rel_pos)
         if self.orbit_radius > 0:
             rel_pos_norm = rel_pos / self.orbit_radius
-            self.orbit_phi = np.arcsin(np.clip(rel_pos_norm[1], -1.0, 1.0))
-            self.orbit_theta = np.arctan2(rel_pos_norm[0], rel_pos_norm[2])
+            self.orbit_phi = np.arcsin(np.clip(rel_pos_norm[1], -1.0, 1.0))#вертикальный угол
+            self.orbit_theta = np.arctan2(rel_pos_norm[0], rel_pos_norm[2])#горизонтальный угол
 
-    def get_view_direction(self):
+    def get_view_direction(self):#направление взгляда камеры
         return normalize(self.target - self.position)
 
     def get_view_matrix(self):
-        forward = normalize(self.target - self.position)
-        right = normalize(np.cross(forward, self.up))
-        true_up = np.cross(right, forward)
+        forward = normalize(self.target - self.position)#Направление взгляда
+        right = normalize(np.cross(forward, self.up))#Правая ось камеры
+        true_up = np.cross(right, forward)#Настоящая верхняя ось камеры
 
         R = np.eye(4)
         R[0, :3] = right
         R[1, :3] = true_up
-        R[2, :3] = -forward
+        R[2, :3] = -forward#поворот системы координат относительно камеры
 
-        T_mat = T(-self.position[0], -self.position[1], -self.position[2])
+        T_mat = T(-self.position[0], -self.position[1], -self.position[2])#преобразуем координаты, чтобы в новой системе координат камера находилась в начале
         return R @ T_mat
 
     def get_projection_matrix(self):
-        f = 1.0 / np.tan(np.radians(self.fov / 2.0))
+        f = 1.0 / np.tan(np.radians(self.fov / 2.0))#коэффициент перспективного масштабирования
         M = np.zeros((4, 4), dtype=float)
-        M[0, 0] = f / max(self.aspect, 1e-6)
+        M[0, 0] = f / max(self.aspect, 1e-6)#определяют ширину и форму области обзора
         M[1, 1] = f
         M[2, 2] = -(self.far + self.near) / (self.far - self.near)
-        M[2, 3] = -2 * self.far * self.near / (self.far - self.near)
+        M[2, 3] = -2 * self.far * self.near / (self.far - self.near)#её ближнюю и дальнюю границы по глубине.
         M[3, 2] = -1.0
         return M
 
-    def orbit_rotate(self, delta_theta, delta_phi):
+    def orbit_rotate(self, delta_theta, delta_phi):#вращение камеры вокруг неподвижного объекта
         self.orbit_theta += np.radians(delta_theta)
         self.orbit_phi += np.radians(delta_phi)
 
@@ -276,11 +276,11 @@ class Camera:
         direction = normalize(self.position - self.target)
         self.position = self.target + direction * self.orbit_radius
 
-    def set_target(self, target):
+    def set_target(self, target):#новую точку, на которую смотрит камера
         self.target = np.array(target)
         self._update_orbit_angles()
 
-    def reset(self, position=None, target=None):
+    def reset(self, position=None, target=None):#сброс положения камеры
         if position is not None:
             self.position = np.array(position)
         if target is not None:
@@ -641,7 +641,6 @@ class Lab8App:
         self.proj = tk.StringVar(value='perspective')
         self.cull = tk.BooleanVar(value=False)
         self.show_edges = tk.BooleanVar(value=False)
-        self.auto = tk.BooleanVar(value=False)
         self.use_z = tk.BooleanVar(value=True)
         self.model_name = tk.StringVar(value='Гексаэдр')
         self.view_xyz = [tk.StringVar(value=v) for v in ('0', '0', '-1')]
@@ -655,7 +654,6 @@ class Lab8App:
         self.show_normals = tk.BooleanVar(value=False)
         self.cam_pos = tk.StringVar()
         self.drag = None
-        self.timer = None
         self.meshes = []
         self.base_mesh = None
         self.camera = Camera(position=[0, 1.5, 5], target=[0, 0, 0])
@@ -730,7 +728,6 @@ class Lab8App:
         r = ttk.Frame(f); r.pack(fill='x', pady=2)
         ttk.Button(r, text='+ Ближе', command=lambda: self.camera_zoom(1)).pack(side='left', expand=True, fill='x')
         ttk.Button(r, text='− Дальше', command=lambda: self.camera_zoom(-1)).pack(side='left', expand=True, fill='x')
-        ttk.Checkbutton(f, text='Автовращение камеры', variable=self.auto, command=self.toggle_auto).pack(anchor='w', pady=3)
         ttk.Button(f, text='Сброс камеры', command=self.reset_camera).pack(fill='x')
         ttk.Label(f, textvariable=self.cam_pos, foreground='#48627d', wraplength=245).pack(anchor='w', pady=4)
 
@@ -778,9 +775,9 @@ class Lab8App:
         return (lo + hi) / 2, max(float(np.linalg.norm(hi - lo)), .01)
 
     def fit_camera(self):
-        center, diameter = self._bounds()
+        center, diameter = self._bounds()#длину диагонали(размер) объёма модели
         self.camera.reset(position=center + np.array([diameter * 1.05, diameter * .30, diameter * .60]), target=center)
-        self.update_cam_label()
+        self.update_cam_label()#разместить камеру относительно центра модели^
 
     def load_obj_file(self, path):
         obj = OBJModel()
@@ -853,11 +850,31 @@ class Lab8App:
         self.update_cam_label()
         self.render()
 
+    #def camera_zoom(self, d):
+    #radius = self.camera.orbit_radius
+    #self.camera.zoom(d * radius * .12)
+    #self.update_cam_label()
+    #self.render()
     def camera_zoom(self, d):
         radius = self.camera.orbit_radius
-        self.camera.zoom(d * radius * .12)
+        _, diameter = self._bounds()#размер модели
+
+        min_radius = max(0.5, diameter * 0.65)
+        max_radius = diameter * 20.0
+
+        new_radius = np.clip(
+            radius - d * radius * 0.12,
+            min_radius,
+            max_radius
+        )
+
+        direction = normalize(self.camera.position - self.camera.target)#направление от цели к камере
+        self.camera.orbit_radius = new_radius
+        self.camera.position = self.camera.target + direction * new_radius
+
         self.update_cam_label()
         self.render()
+
 
     def reset_camera(self):
         self.fit_camera()
@@ -866,28 +883,13 @@ class Lab8App:
     def start_drag(self, e):
         self.drag = (e.x, e.y)
 
-    def drag_camera(self, e):
+    def drag_camera(self, e):#вращает камеру при перемещении мыши
         if self.drag:
-            dx, dy = e.x - self.drag[0], e.y - self.drag[1]
+            dx, dy = e.x - self.drag[0], e.y - self.drag[1]#смещение мыши по двум осям
             self.drag = (e.x, e.y)
             self.orbit(-dx * .45, dy * .45)
 
-    def toggle_auto(self):
-        if self.auto.get() and self.timer is None:
-            self.animate()
-        if not self.auto.get() and self.timer is not None:
-            self.root.after_cancel(self.timer)
-            self.timer = None
-
-    def animate(self):
-        self.timer = None
-        if self.auto.get():
-            self.orbit(1.3, 0)
-            self.timer = self.root.after(65, self.animate)
-
     def close(self):
-        if self.timer is not None:
-            self.root.after_cancel(self.timer)
         self.root.destroy()
 
     def set_view_vector(self):
@@ -918,11 +920,18 @@ class Lab8App:
             model.scale_about_center(k)
         self.render()
 
+    
     def translate_object(self):
         vec = [self._parse(t, 0.) for t in self.move_xyz]
+
         for model, _ in self.meshes:
             model.translate(*vec)
+
+        self.camera.set_target(self.camera.target + np.array(vec))
+
+        self.update_cam_label()
         self.render()
+
 
     def reflect_object(self):
         for model, _ in self.meshes:
@@ -955,11 +964,11 @@ class Lab8App:
         width, height = self.canvas.winfo_width(), self.canvas.winfo_height()
         if width < 15 or height < 15:
             return
-        self.camera.aspect = width / height
+        self.camera.aspect = width / height#вычисляем соотношение сторон
         if self.mode.get() == 'camera' and self.proj.get() != 'perspective':
             self.proj.set('perspective')
         perspective_mode = self.proj.get() == 'perspective'
-        view = self.camera.get_view_matrix()
+        view = self.camera.get_view_matrix()#видовая матрица
         mode = self.mode.get()
         culling = self.cull.get() or mode == 'culling'
         wire = mode in ('wire', 'culling')
@@ -971,15 +980,15 @@ class Lab8App:
         self._normal_lines = []
         for obj, base_color in self.meshes:
             vertices = obj.V[:3] / obj.V[3]
-            Vcam = view @ obj.V
+            Vcam = view @ obj.V#координаты вершин относительно камеры
             cam = Vcam[:3] / Vcam[3]
             z = -cam[2]
             if perspective_mode:
                 projected = self.camera.get_projection_matrix() @ Vcam
                 wcoord = projected[3]
-                valid = wcoord > self.camera.near
+                valid = wcoord > self.camera.near#аходятся ли вершины дальше ближней границы видимости камеры
                 ndcx = np.divide(projected[0], wcoord, out=np.zeros_like(wcoord), where=valid)
-                ndcy = np.divide(projected[1], wcoord, out=np.zeros_like(wcoord), where=valid)
+                ndcy = np.divide(projected[1], wcoord, out=np.zeros_like(wcoord), where=valid)#нормализованные координаты проекции
             else:
                 _, dia = self._bounds()
                 ortho_half_h = max(dia * .72, 0.1)
