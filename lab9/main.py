@@ -978,34 +978,39 @@ def phong_shading(normal, view_dir, light_dir, material, light):
     return ambient_color + diffuse_color + specular_color
 
 
-# ЛАБ 9.1.2 — Туншейдинг
+# ЛАБ 9.1.2 — Модель туншейдинга
 def toon_shading(normal, light_dir, material, light):
-    """Вычисляет освещение по модели туншейдинга (toon shading).
-    
-    Туншейдинг - это пороговое затенение, которое создает мультяшный эффект
-    с дискретными уровнями освещённости вместо плавного перехода.
-    """
-    # Вычисляем косинус угла между нормалью и направлением к свету
-    cos_theta = max(0.0, np.dot(normal, light_dir))
-    
-    # Определяем дискретные уровни освещённости (пороговые значения)
-    # Создаем 5 уровней яркости для более выразительного мультяшного эффекта
-    if cos_theta > 0.8:
-        intensity = 1.0  # Самый яркий (прямой свет)
-    elif cos_theta > 0.6:
-        intensity = 0.8  # Яркий
-    elif cos_theta > 0.4:
-        intensity = 0.6  # Средний
-    elif cos_theta > 0.2:
-        intensity = 0.4  # Тёмный
-    else:
-        intensity = 0.25  # Самый тёмный (но не чёрный)
-    
-    # Применяем дискретную интенсивность к цвету
-    # Уменьшаем вклад ambient для более выраженного эффекта
+    """Вычисляет цвет по модели туншейдинга."""
+
+    # Косинус угла между нормалью и направлением к свету
+    cos_theta = np.maximum(
+        0.0, np.sum(normal * light_dir, axis=-1)
+    )
+
+    # Пять дискретных уровней освещенности
+    intensity = np.select(
+        [
+            cos_theta > 0.8,
+            cos_theta > 0.6,
+            cos_theta > 0.4,
+            cos_theta > 0.2
+        ],
+        [1.0, 0.8, 0.6, 0.4],
+        default=0.25
+    )
+
+    # Фоновая составляющая освещения
     ambient_color = material.ambient * 0.3 * material.color
-    toon_color = intensity * material.diffuse * material.color * light.color * light.intensity
-    
+
+    # Диффузная составляющая с дискретной интенсивностью
+    toon_color = (
+        intensity[..., np.newaxis]
+        * material.diffuse
+        * material.color
+        * light.color
+        * light.intensity
+    )
+
     return ambient_color + toon_color
 
 
@@ -1023,16 +1028,16 @@ def interpolate_color(colors, weights):
 
 # ЛАБ 9.1.2 — Интерполяция нормалей
 def interpolate_normal(normals, weights):
-    """Интерполирует нормаль между вершинами с последующей нормализацией.
-    
-    Используется для метода Фонга - интерполяция нормалей между вершинами
-    с обязательной нормализацией результата.
-    """
-    result = np.zeros(3, dtype=float)
-    for i, normal in enumerate(normals):
-        result += weights[i] * np.array(normal, dtype=float)
-    # ВАЖНО: обязательная нормализация интерполированной нормали
-    return normalize(result)
+    """Интерполирует нормали и нормализует результат."""
+    normals = np.asarray(normals, dtype=float)
+    weights = np.asarray(weights, dtype=float)
+
+    result = weights @ normals
+
+    lengths = np.linalg.norm(result, axis=-1, keepdims=True)
+    lengths = np.where(lengths == 0, 1.0, lengths)
+
+    return result / lengths
 
 
 # ЛАБ 9.2 — Интерполяция текстурных координат
@@ -1197,74 +1202,106 @@ def rasterize_triangle_gouraud_zbuffer(zbuffer, vertices_2d, vertices_3d, vertex
 
 
 # ЛАБ 9.1.2 — Растеризация Фонга с туншейдингом
-def rasterize_triangle_phong_zbuffer(zbuffer, vertices_2d, vertices_3d, vertex_normals, view_dir, light, material):
-    """Растеризует треугольник с интерполяцией нормалей по Фонгу и туншейдингом.
-    
-    Метод Фонга (Phong Shading) с туншейдингом:
-    1. Интерполирует нормали между вершинами методом билинейной (барицентрической) интерполяции
-    2. Нормализует интерполированную нормаль для каждого пикселя
-    3. Вычисляет цвет по модели туншейдинга с интерполированной нормалью
-    
-    Билинейная интерполяция нормалей:
-    - normal(x,y) = normalize(w0*normal0 + w1*normal1 + w2*normal2)
-    - ВАЖНО: нормализация необходима после интерполяции!
-    """
-    if len(vertices_2d) != 3 or len(vertex_normals) != 3:
+def rasterize_triangle_phong_zbuffer(zbuffer, vertices_2d, vertices_3d, vertex_normals, view_dir, light, material, depth_sign=1.0, perspective_correct=False):
+    """Шейдинг Фонга с билинейной интерполяцией по полосам выпуклой грани."""
+    points = np.asarray(vertices_2d, dtype=float)
+    positions = np.asarray(vertices_3d, dtype=float)
+    normals = np.asarray(vertex_normals, dtype=float)
+    n = len(points)
+    if n < 3 or len(normals) != n or len(positions) != n:
+        return
+    if not (np.all(np.isfinite(points)) and np.all(np.isfinite(positions)) and np.all(np.isfinite(normals))):
         return
 
-    x0, y0, z0 = vertices_2d[0][0], vertices_2d[0][1], vertices_3d[0][2]
-    x1, y1, z1 = vertices_2d[1][0], vertices_2d[1][1], vertices_3d[1][2]
-    x2, y2, z2 = vertices_2d[2][0], vertices_2d[2][1], vertices_3d[2][2]
+    if perspective_correct:
+        depth = depth_sign * positions[:, 2]
+        if np.any(depth <= 1e-8):
+            return
+        inv_depth = 1.0 / depth
+        positions = positions * inv_depth[:, None]
+        normals = normals * inv_depth[:, None]
+    else:
+        inv_depth = np.ones(n)
 
-    min_x = max(0, int(min(x0, x1, x2)))
-    max_x = min(zbuffer.width, int(max(x0, x1, x2)) + 1)
-    min_y = max(0, int(min(y0, y1, y2)))
-    max_y = min(zbuffer.height, int(max(y0, y1, y2)) + 1)
+    # Разбиваем грань на горизонтальные полосы по высотам вершин.
+    # В каждой полосе левая и правая границы являются отрезками.
+    levels = np.unique(points[:, 1])
+    for top, bottom in zip(levels[:-1], levels[1:]):
+        middle = (top + bottom) / 2
+        edges = []
+        for i in range(n):
+            j = (i + 1) % n
+            yi, yj = points[i, 1], points[j, 1]
+            if min(yi, yj) < middle < max(yi, yj):
+                a = (middle - yi) / (yj - yi)
+                edges.append((points[i, 0] + a * (points[j, 0] - points[i, 0]), i, j))
+        if len(edges) != 2:
+            continue
+        edges.sort()
 
-    def compute_barycentric_weights(x, y):
-        """Вычисляет барицентрические координаты для точки (x, y) в треугольнике."""
-        denom = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2)
-        if abs(denom) < 1e-10:
-            return None
+        # Четыре угла полосы: слева сверху, справа сверху,
+        # слева снизу, справа снизу. Нормали на ребрах не нормализуем.
+        corners_x = []
+        corners_pos = []
+        corners_normal = []
+        corners_inv_depth = []
+        for height in (top, bottom):
+            for _, i, j in edges:
+                a = (height - points[i, 1]) / (points[j, 1] - points[i, 1])
+                corners_x.append((1 - a) * points[i, 0] + a * points[j, 0])
+                corners_pos.append((1 - a) * positions[i] + a * positions[j])
+                corners_normal.append((1 - a) * normals[i] + a * normals[j])
+                corners_inv_depth.append((1 - a) * inv_depth[i] + a * inv_depth[j])
 
-        # Барицентрические координаты (веса)
-        w0 = ((y1 - y2) * (x - x2) + (x2 - x1) * (y - y2)) / denom
-        w1 = ((y2 - y0) * (x - x2) + (x0 - x2) * (y - y2)) / denom
-        w2 = 1.0 - w0 - w1
+        # Сетка центров пикселей в пределах полосы.
+        min_x = max(0, int(np.ceil(min(corners_x) - 0.5)))
+        max_x = min(zbuffer.width, int(np.floor(max(corners_x) - 0.5)) + 1)
+        min_y = max(0, int(np.ceil(top - 0.5)))
+        max_y = min(zbuffer.height, int(np.ceil(bottom - 0.5)))
+        if min_x >= max_x or min_y >= max_y:
+            continue
+        X, Y = np.meshgrid(np.arange(min_x, max_x), np.arange(min_y, max_y))
 
-        return w0, w1, w2
+        # Первый этап: линейная интерполяция вдоль левого и правого ребер.
+        t = (Y + 0.5 - top) / (bottom - top)
+        left = (1 - t) * corners_x[0] + t * corners_x[2]
+        right = (1 - t) * corners_x[1] + t * corners_x[3]
 
-    for y in range(min_y, max_y):
-        for x in range(min_x, max_x):
-            weights = compute_barycentric_weights(x + 0.5, y + 0.5)  # Центр пикселя
-            if weights is None:
-                continue
+        # Второй этап: линейная интерполяция между ребрами.
+        width = right - left
+        mask = (width > 0) & (X + 0.5 >= left) & (X + 0.5 <= right)
+        x, y = X[mask], Y[mask]
+        if x.size == 0:
+            continue
+        u = (x + 0.5 - left[mask]) / width[mask]
+        t = t[mask]
 
-            w0, w1, w2 = weights
+        # Билинейные веса четырех углов полосы.
+        weights = np.stack([
+            (1 - u) * (1 - t), u * (1 - t),
+            (1 - u) * t, u * t
+        ], axis=1)
 
-            # Проверка, что точка внутри треугольника
-            if w0 >= 0 and w1 >= 0 and w2 >= 0:
-                # Билинейная интерполяция z-координаты
-                z = w0 * z0 + w1 * z1 + w2 * z2
+        # Интерполяция координат и проверка Z-буфера.
+        pixel_pos = weights @ np.asarray(corners_pos)
+        if perspective_correct:
+            pixel_pos /= (weights @ np.asarray(corners_inv_depth))[:, None]
+        z = depth_sign * pixel_pos[:, 2]
+        visible = z < zbuffer.buffer[y, x]
+        x, y, z = x[visible], y[visible], z[visible]
+        if x.size == 0:
+            continue
 
-                # Билинейная интерполяция нормали с последующей нормализацией (метод Фонга)
-                normal = interpolate_normal(vertex_normals, [w0, w1, w2])
+        # Билинейная интерполяция нормалей с последующей нормализацией.
+        pixel_normals = interpolate_normal(corners_normal, weights[visible])
+        light_dirs = light.position - pixel_pos[visible]
+        lengths = np.linalg.norm(light_dirs, axis=1, keepdims=True)
+        light_dirs = light_dirs / np.where(lengths == 0, 1.0, lengths)
 
-                # Вычисляем интерполированную позицию для точного направления к свету
-                pos_x = w0 * vertices_3d[0][0] + w1 * vertices_3d[1][0] + w2 * vertices_3d[2][0]
-                pos_y = w0 * vertices_3d[0][1] + w1 * vertices_3d[1][1] + w2 * vertices_3d[2][1]
-                pos_z = z
-                pos_3d = np.array([pos_x, pos_y, pos_z], dtype=float)
-
-                # Направление от точки к источнику света
-                light_dir = normalize(light.position - pos_3d)
-                
-                # Вычисляем цвет по модели туншейдинга с интерполированной нормалью
-                color = toon_shading(normal, light_dir, material, light)
-
-                # Тестируем и устанавливаем в z-буфер
-                zbuffer.test_and_set(x, y, z, color)
-
+        # Вычисляем цвет каждого видимого пикселя по модели туншейдинга.
+        colors = toon_shading(pixel_normals, light_dirs, material, light)
+        zbuffer.buffer[y, x] = z
+        zbuffer.color_buffer[y, x] = colors
 
 # ЛАБ 9.2 — Растеризация с текстурой
 def rasterize_triangle_textured_zbuffer(zbuffer, vertices_2d, vertices_3d, tex_coords, texture, vertex_normals=None, view_dir=None, light=None, material=None):
@@ -2023,6 +2060,35 @@ class App:
             zbuffer = ZBuffer(W, H)
             zbuffer.clear()
 
+            # ЛАБ 9.1.2 — Согласование света, обзора и глубины для Фонга
+            if render_mode == 'phong':
+                if mode == 'camera':
+                    view_matrix = self.camera.get_view_matrix()
+                    depth_sign = -1.0
+                elif mode == 'perspective':
+                    view_matrix = T(0, 0, 5.0)
+                    depth_sign = 1.0
+                else:
+                    view_matrix = Rx(35.264389682754654) @ Rz(45.0)
+                    depth_sign = -1.0
+
+                light_position = from_h(view_matrix @ to_h(self.light.position))
+                phong_light = Light(light_position, self.light.color, self.light.intensity)
+                visible_faces = []
+                for face in transformed_poly.faces:
+                    if len(face.indices) < 3 or face.normal is None:
+                        continue
+                    face_points = vertices_3d[:, face.indices]
+                    if mode in ('camera', 'perspective'):
+                        # Не проецируем грани, пересекающие плоскость камеры.
+                        if np.any(depth_sign * face_points[2] <= 1e-8):
+                            continue
+                        view_dir = -np.mean(face_points, axis=1)
+                    else:
+                        view_dir = np.array([0.0, 0.0, 1.0])
+                    if np.dot(face.normal, view_dir) > 0:
+                        visible_faces.append(face)
+
             # Рендерим все грани через z-буфер
             for face in visible_faces:
                 if len(face.indices) < 3:
@@ -2065,28 +2131,13 @@ class App:
 
                 # ЛАБ 9.1.2 — Отрисовка Фонга с туншейдингом
                 elif render_mode == 'phong':
-                    # Режим Фонга с туншейдингом:
-                    # 1. Интерполируем нормали между вершинами (метод Фонга)
-                    # 2. Применяем туншейдинг к каждому пикселю с интерполированной нормалью
-                    view_dir = np.array([0, 0, 1])  # Упрощенное направление взгляда
                     vertex_normals = face.vertex_normals if face.vertex_normals else [face.normal] * len(face.indices)
-
-                    if len(face.indices) == 3:
-                        rasterize_triangle_phong_zbuffer(zbuffer, face_vertices_2d, face_vertices_3d, vertex_normals,
-                                                         view_dir, self.light, self.material)
-                    elif len(face.indices) == 4:
-                        # Разбиваем четырехугольник на два треугольника
-                        tri1_2d = [face_vertices_2d[0], face_vertices_2d[1], face_vertices_2d[2]]
-                        tri1_3d = [face_vertices_3d[0], face_vertices_3d[1], face_vertices_3d[2]]
-                        tri1_normals = [vertex_normals[0], vertex_normals[1], vertex_normals[2]]
-                        rasterize_triangle_phong_zbuffer(zbuffer, tri1_2d, tri1_3d, tri1_normals, view_dir, self.light,
-                                                         self.material)
-
-                        tri2_2d = [face_vertices_2d[0], face_vertices_2d[2], face_vertices_2d[3]]
-                        tri2_3d = [face_vertices_3d[0], face_vertices_3d[2], face_vertices_3d[3]]
-                        tri2_normals = [vertex_normals[0], vertex_normals[2], vertex_normals[3]]
-                        rasterize_triangle_phong_zbuffer(zbuffer, tri2_2d, tri2_3d, tri2_normals, view_dir, self.light,
-                                                         self.material)
+                    rasterize_triangle_phong_zbuffer(
+                        zbuffer, face_vertices_2d, face_vertices_3d,
+                        vertex_normals, None, phong_light, self.material,
+                        depth_sign=depth_sign,
+                        perspective_correct=mode in ('camera', 'perspective')
+                    )
 
                 # ЛАБ 9.2 — Отрисовка текстуры
                 elif render_mode == 'texture':
