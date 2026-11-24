@@ -533,7 +533,33 @@ class Polyhedron:
 
     # ЛАБ 9.1 — Нормали вершин
     def compute_vertex_normals(self):
-        """Вычисляет нормали вершин как среднее нормалей прилегающих граней."""
+        """Вычисляет нормали вершин.
+
+        Если полиэдр загружен из OBJ и содержит нормали (self.normals)
+        и индексы нормалей в гранях (face.normals), используются они.
+        Иначе нормали вершин вычисляются как среднее нормалей прилегающих граней.
+        """
+        has_obj_normals = (
+            bool(self.normals)
+            and any(len(face.normals) == len(face.indices) for face in self.faces)
+        )
+
+        if has_obj_normals:
+            # Используем нормали из OBJ
+            for face in self.faces:
+                if len(face.normals) == len(face.indices):
+                    face.vertex_normals = [
+                        normalize(np.asarray(self.normals[idx], dtype=float))
+                        for idx in face.normals
+                    ]
+                else:
+                    # На всякий случай: если у грани нет индексов нормалей,
+                    # подставим нормаль грани (после её вычисления)
+                    n = face.normal if face.normal is not None else np.array([0.0, 0.0, 1.0])
+                    face.vertex_normals = [n.copy() for _ in face.indices]
+            return
+
+        # Иначе — усреднение нормалей прилегающих граней
         vertices_3d = self.V[:3, :] / self.V[3, :]
         vertex_normals = [np.zeros(3) for _ in range(vertices_3d.shape[1])]
         vertex_face_count = [0 for _ in range(vertices_3d.shape[1])]
@@ -2134,6 +2160,18 @@ class App:
             zbuffer = ZBuffer(W, H)
             zbuffer.clear()
 
+            # ЛАБ 9.1.1 — Согласование света и координат для Гуро
+            # Вершины и нормали в transformed_poly уже в системе координат камеры,
+            # поэтому источник света тоже переводим туда же.
+            if render_mode == 'gouraud':
+                if mode == 'isometric':
+                    view_matrix = Rx(35.264389682754654) @ Rz(45.0)
+                else:
+                    view_matrix = self.camera.get_view_matrix()
+
+                gouraud_light_pos = from_h(view_matrix @ to_h(self.light.position))
+                gouraud_light = Light(gouraud_light_pos, self.light.color, self.light.intensity)
+
             # ЛАБ 9.1.2 — Согласование света, обзора и глубины для Фонга
             if render_mode == 'phong':
                 if mode == 'camera':
@@ -2184,7 +2222,7 @@ class App:
 
                 # ЛАБ 9.1.1 — Отрисовка Гуро
                 if render_mode == 'gouraud':
-                    # Вычисляем цвета вершин
+                    # Вычисляем цвета вершин (модель Ламберта)
                     vertex_colors = []
                     for i, vertex_idx in enumerate(face.indices):
                         vertex_pos = vertices_3d[:, vertex_idx]
@@ -2194,8 +2232,10 @@ class App:
                             vertex_colors.append(self.material.color)
                             continue
 
-                        light_dir = normalize(self.light.position - vertex_pos)
-                        vertex_color = lambert_shading(vertex_normal, light_dir, self.material, self.light)
+                        # Свет уже в системе координат камеры (см. выше)
+                        light_dir = normalize(gouraud_light.position - vertex_pos)
+                        vertex_color = lambert_shading(vertex_normal, light_dir,
+                                                       self.material, gouraud_light)
                         vertex_colors.append(vertex_color)
 
                     # Растеризуем треугольники
