@@ -1135,60 +1135,61 @@ def get_texture_color(texture, u, v):
 
 # ЛАБ 9.1.1 — Растеризация Гуро
 def rasterize_triangle_gouraud_zbuffer(zbuffer, vertices_2d, vertices_3d, vertex_colors):
-    """Растеризует треугольник с интерполяцией цвета по Гуро и z-буфером.
-    
-    Метод Гуро (Gouraud Shading):
-    1. Вычисляет цвет в каждой вершине по модели Ламберта (диффузное отражение)
-    2. Интерполирует цвет между вершинами методом билинейной (барицентрической) интерполяции
-    
-    Билинейная интерполяция реализуется через барицентрические координаты:
-    - w0, w1, w2 - барицентрические веса для трёх вершин треугольника
-    - color(x,y) = w0*color0 + w1*color1 + w2*color2
-    """
+    """Растеризует треугольник с интерполяцией цвета по Гуро и z-буфером (векторно)."""
     if len(vertices_2d) != 3 or len(vertex_colors) != 3:
         return
 
-    x0, y0, z0 = vertices_2d[0][0], vertices_2d[0][1], vertices_3d[0][2]
-    x1, y1, z1 = vertices_2d[1][0], vertices_2d[1][1], vertices_3d[1][2]
-    x2, y2, z2 = vertices_2d[2][0], vertices_2d[2][1], vertices_3d[2][2]
+    points = np.asarray(vertices_2d, dtype=float)
+    verts = np.asarray(vertices_3d, dtype=float)
+    colors = np.asarray(vertex_colors, dtype=float)
+    if not np.all(np.isfinite(points)):
+        return
 
-    min_x = max(0, int(min(x0, x1, x2)))
-    max_x = min(zbuffer.width, int(max(x0, x1, x2)) + 1)
-    min_y = max(0, int(min(y0, y1, y2)))
-    max_y = min(zbuffer.height, int(max(y0, y1, y2)) + 1)
+    # Ограничивающий прямоугольник в пикселях
+    x0 = max(0, int(np.floor(points[:, 0].min())))
+    x1 = min(zbuffer.width, int(np.ceil(points[:, 0].max())) + 1)
+    y0 = max(0, int(np.floor(points[:, 1].min())))
+    y1 = min(zbuffer.height, int(np.ceil(points[:, 1].max())) + 1)
+    if x0 >= x1 or y0 >= y1:
+        return
 
-    def compute_barycentric_weights(x, y):
-        """Вычисляет барицентрические координаты для точки (x, y) в треугольнике."""
-        denom = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2)
-        if abs(denom) < 1e-10:
-            return None
+    (ax, ay), (bx, by), (cx, cy) = points
+    den = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy)
+    if abs(den) < 1e-10:
+        return
 
-        # Барицентрические координаты (веса)
-        w0 = ((y1 - y2) * (x - x2) + (x2 - x1) * (y - y2)) / denom
-        w1 = ((y2 - y0) * (x - x2) + (x0 - x2) * (y - y2)) / denom
-        w2 = 1.0 - w0 - w1
+    # Сетка центров пикселей
+    yy, xx = np.mgrid[y0:y1, x0:x1]
+    px = xx + 0.5
+    py = yy + 0.5
 
-        return w0, w1, w2
+    # Барицентрические веса сразу для всех пикселей
+    w0 = ((by - cy) * (px - cx) + (cx - bx) * (py - cy)) / den
+    w1 = ((cy - ay) * (px - cx) + (ax - cx) * (py - cy)) / den
+    w2 = 1.0 - w0 - w1
 
-    for y in range(min_y, max_y):
-        for x in range(min_x, max_x):
-            weights = compute_barycentric_weights(x + 0.5, y + 0.5)  # Центр пикселя
-            if weights is None:
-                continue
+    inside = (w0 >= -1e-7) & (w1 >= -1e-7) & (w2 >= -1e-7)
+    if not np.any(inside):
+        return
 
-            w0, w1, w2 = weights
+    # Интерполяция глубины
+    z = w0 * verts[0, 2] + w1 * verts[1, 2] + w2 * verts[2, 2]
 
-            # Проверка, что точка внутри треугольника
-            if w0 >= 0 and w1 >= 0 and w2 >= 0:
-                # Билинейная интерполяция z-координаты
-                z = w0 * z0 + w1 * z1 + w2 * z2
+    # Интерполяция цвета (Гуро)
+    color = (w0[..., None] * colors[0] +
+             w1[..., None] * colors[1] +
+             w2[..., None] * colors[2])
+    color = np.clip(color, 0.0, 1.0)
 
-                # Билинейная интерполяция цвета (метод Гуро)
-                color = interpolate_color(vertex_colors, [w0, w1, w2])
+    # Тест Z-буфера — векторно
+    z_region = zbuffer.buffer[y0:y1, x0:x1]
+    visible = inside & (z < z_region)
+    if not np.any(visible):
+        return
 
-                # Тестируем и устанавливаем в z-буфер
-                zbuffer.test_and_set(x, y, z, color)
-
+    z_region[visible] = z[visible]
+    color_region = zbuffer.color_buffer[y0:y1, x0:x1]
+    color_region[visible] = color[visible]
 
 # ЛАБ 9.1.2 — Растеризация Фонга с туншейдингом
 def rasterize_triangle_phong_zbuffer(zbuffer, vertices_2d, vertices_3d, vertex_normals, view_dir, light, material, depth_sign=1.0, perspective_correct=False):
