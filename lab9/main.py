@@ -1512,300 +1512,222 @@ class App:
         self.create_ui()
 
     def create_ui(self):
-        """Создает пользовательский интерфейс."""
-        top = ttk.Frame(self.root)
-        top.pack(side=tk.TOP, fill=tk.X, padx=8, pady=8)
+        """Боковая прокручиваемая панель в стиле лабораторной № 8."""
+        self.root.title('Лабораторная № 9 — Освещение и текстурирование')
+        self.root.geometry('1260x780')
+        self.root.minsize(850, 540)
 
-        ttk.Label(top, text='Многогранник:').pack(side=tk.LEFT)
-        self.poly_box = ttk.Combobox(
-            top,
-            textvariable=self.poly_var,
-            values=list(POLY_BUILDERS.keys()),
-            state='readonly',
-            width=18,
-        )
-        self.poly_box.pack(side=tk.LEFT, padx=(6, 12))
-        self.poly_box.bind('<<ComboboxSelected>>', lambda e: self.rebuild_model())
+        shell = ttk.Frame(self.root)
+        shell.pack(fill='both', expand=True)
 
-        ttk.Label(top, text='Проекция:').pack(side=tk.LEFT)
-        self.rb_persp = ttk.Radiobutton(
-            top, text='Перспективная', value='perspective', variable=self.proj_var,
-            command=self.redraw
-        )
-        self.rb_iso = ttk.Radiobutton(
-            top, text='Аксонометрическая', value='isometric', variable=self.proj_var,
-            command=self.redraw
-        )
-        self.rb_camera = ttk.Radiobutton(
-            top, text='Камера', value='camera', variable=self.proj_var,
-            command=self.redraw
-        )
-        self.rb_persp.pack(side=tk.LEFT, padx=(6, 6))
-        self.rb_iso.pack(side=tk.LEFT, padx=(6, 6))
-        self.rb_camera.pack(side=tk.LEFT)
+        # Левая панель с вертикальной прокруткой — как в лабораторной № 8.
+        sidebar = ttk.Frame(shell, width=285)
+        sidebar.pack(side='left', fill='y')
+        sidebar.pack_propagate(False)
+        scroll_canvas = tk.Canvas(sidebar, width=269, highlightthickness=0, bg='#f4f6fa')
+        scrollbar = ttk.Scrollbar(sidebar, orient='vertical', command=scroll_canvas.yview)
+        scrollbar.pack(side='right', fill='y')
+        scroll_canvas.pack(side='left', fill='both', expand=True)
+        scroll_canvas.configure(yscrollcommand=scrollbar.set)
+        panel = ttk.Frame(scroll_canvas, padding=9)
+        window_id = scroll_canvas.create_window((0, 0), window=panel, anchor='nw')
+        panel.bind('<Configure>', lambda e: scroll_canvas.configure(scrollregion=scroll_canvas.bbox('all')))
+        scroll_canvas.bind('<Configure>', lambda e: scroll_canvas.itemconfig(window_id, width=e.width))
+        scroll_canvas.bind('<MouseWheel>', lambda e: scroll_canvas.yview_scroll(-int(e.delta / 120), 'units'))
+        scroll_canvas.bind('<Button-4>', lambda e: scroll_canvas.yview_scroll(-1, 'units'))
+        scroll_canvas.bind('<Button-5>', lambda e: scroll_canvas.yview_scroll(1, 'units'))
 
-        ttk.Label(top, text='Режим:').pack(side=tk.LEFT, padx=(12, 2))
-        self.render_combo = ttk.Combobox(
-            top,
-            textvariable=self.render_mode,
-            values=['wireframe', 'gouraud', 'phong', 'texture'],
-            state='readonly',
-            width=12,
-        )
-        self.render_combo.pack(side=tk.LEFT, padx=(2, 12))
-        self.render_combo.bind('<<ComboboxSelected>>', lambda e: self.redraw())
-
-        ttk.Button(top, text='Сброс', command=self.rebuild_model).pack(side=tk.RIGHT)
-        ttk.Button(top, text='Сохранить OBJ', command=self.save_obj).pack(side=tk.RIGHT, padx=(0, 6))
-        ttk.Button(top, text='Загрузить OBJ', command=self.load_obj).pack(side=tk.RIGHT, padx=(0, 6))
-
-        # Панель настроек освещения
-        light_frame = ttk.LabelFrame(self.root, text='Освещение')
-        light_frame.pack(side=tk.TOP, fill=tk.X, padx=8, pady=(0, 8))
-
-        light_row1 = ttk.Frame(light_frame)
-        light_row1.pack(side=tk.TOP, fill=tk.X, pady=4)
-
-        ttk.Label(light_row1, text='Позиция света (x,y,z):').pack(side=tk.LEFT, padx=(6, 4))
-        self.light_x_entry = ttk.Entry(light_row1, width=6)
-        self.light_x_entry.insert(0, '2')
-        self.light_x_entry.pack(side=tk.LEFT, padx=2)
-
-        self.light_y_entry = ttk.Entry(light_row1, width=6)
-        self.light_y_entry.insert(0, '2')
-        self.light_y_entry.pack(side=tk.LEFT, padx=2)
-
-        self.light_z_entry = ttk.Entry(light_row1, width=6)
-        self.light_z_entry.insert(0, '5')
-        self.light_z_entry.pack(side=tk.LEFT, padx=2)
-
-        ttk.Button(light_row1, text='Применить', command=self.apply_light_position).pack(side=tk.LEFT, padx=6)
-
-        light_row2 = ttk.Frame(light_frame)
-        light_row2.pack(side=tk.TOP, fill=tk.X, pady=4)
-
-        ttk.Label(light_row2, text='Цвет объекта (R,G,B):').pack(side=tk.LEFT, padx=(6, 4))
-        self.mat_r_entry = ttk.Entry(light_row2, width=6)
-        self.mat_r_entry.insert(0, '0.8')
-        self.mat_r_entry.pack(side=tk.LEFT, padx=2)
-
-        self.mat_g_entry = ttk.Entry(light_row2, width=6)
-        self.mat_g_entry.insert(0, '0.8')
-        self.mat_g_entry.pack(side=tk.LEFT, padx=2)
-
-        self.mat_b_entry = ttk.Entry(light_row2, width=6)
-        self.mat_b_entry.insert(0, '0.8')
-        self.mat_b_entry.pack(side=tk.LEFT, padx=2)
-
-        ttk.Button(light_row2, text='Применить', command=self.apply_material_color).pack(side=tk.LEFT, padx=6)
-
-        # Панель настроек текстуры
-        texture_frame = ttk.LabelFrame(self.root, text='Текстура')
-        texture_frame.pack(side=tk.TOP, fill=tk.X, padx=8, pady=(0, 8))
-
-        texture_row = ttk.Frame(texture_frame)
-        texture_row.pack(side=tk.TOP, fill=tk.X, pady=4)
-
-        ttk.Label(texture_row, text='Текстура:').pack(side=tk.LEFT, padx=(6, 4))
-        self.texture_combo = ttk.Combobox(
-            texture_row,
-            textvariable=tk.StringVar(value='checkerboard'),
-            values=['checkerboard', 'gradient', 'loaded'],
-            state='readonly',
-            width=12,
-        )
-        self.texture_combo.pack(side=tk.LEFT, padx=(2, 12))
-        self.texture_combo.bind('<<ComboboxSelected>>', lambda e: self.change_texture())
-
-        ttk.Button(texture_row, text='Загрузить текстуру', command=self.load_texture).pack(side=tk.LEFT, padx=6)
-
-        # Панель управления камерой
-        camera_frame = ttk.LabelFrame(self.root, text='Управление камерой')
-        camera_frame.pack(side=tk.TOP, fill=tk.X, padx=8, pady=(0, 8))
-
-        camera_row1 = ttk.Frame(camera_frame)
-        camera_row1.pack(side=tk.TOP, fill=tk.X, pady=4)
-
-        ttk.Label(camera_row1, text='Орбитальное вращение:').pack(side=tk.LEFT, padx=(6, 4))
-        ttk.Label(camera_row1, text='Азимут (°)').pack(side=tk.LEFT, padx=(8, 2))
-        self.cam_azimuth_entry = ttk.Entry(camera_row1, width=6)
-        self.cam_azimuth_entry.insert(0, '10')
-        self.cam_azimuth_entry.pack(side=tk.LEFT, padx=2)
-
-        ttk.Label(camera_row1, text='Высота (°)').pack(side=tk.LEFT, padx=(8, 2))
-        self.cam_elevation_entry = ttk.Entry(camera_row1, width=6)
-        self.cam_elevation_entry.insert(0, '10')
-        self.cam_elevation_entry.pack(side=tk.LEFT, padx=2)
-
-        ttk.Button(camera_row1, text='◄ Влево', command=lambda: self.camera_orbit(-1, 0)).pack(side=tk.LEFT, padx=2)
-        ttk.Button(camera_row1, text='Вправо ►', command=lambda: self.camera_orbit(1, 0)).pack(side=tk.LEFT, padx=2)
-        ttk.Button(camera_row1, text='▲ Вверх', command=lambda: self.camera_orbit(0, 1)).pack(side=tk.LEFT, padx=2)
-        ttk.Button(camera_row1, text='Вниз ▼', command=lambda: self.camera_orbit(0, -1)).pack(side=tk.LEFT, padx=2)
-
-        camera_row2 = ttk.Frame(camera_frame)
-        camera_row2.pack(side=tk.TOP, fill=tk.X, pady=4)
-
-        ttk.Label(camera_row2, text='Приближение:').pack(side=tk.LEFT, padx=(6, 4))
-        ttk.Label(camera_row2, text='Шаг').pack(side=tk.LEFT, padx=(8, 2))
-        self.cam_zoom_entry = ttk.Entry(camera_row2, width=6)
-        self.cam_zoom_entry.insert(0, '0.5')
-        self.cam_zoom_entry.pack(side=tk.LEFT, padx=2)
-
-        ttk.Button(camera_row2, text='+ Приблизить', command=lambda: self.camera_zoom(1)).pack(side=tk.LEFT, padx=2)
-        ttk.Button(camera_row2, text='− Отдалить', command=lambda: self.camera_zoom(-1)).pack(side=tk.LEFT, padx=2)
-
-        camera_row3 = ttk.Frame(camera_frame)
-        camera_row3.pack(side=tk.TOP, fill=tk.X, pady=4)
-
-        ttk.Label(camera_row3, text='Позиция камеры (x,y,z):').pack(side=tk.LEFT, padx=(6, 4))
-        self.cam_pos_x_entry = ttk.Entry(camera_row3, width=6)
-        self.cam_pos_x_entry.insert(0, '0')
-        self.cam_pos_x_entry.pack(side=tk.LEFT, padx=2)
-
-        self.cam_pos_y_entry = ttk.Entry(camera_row3, width=6)
-        self.cam_pos_y_entry.insert(0, '2')
-        self.cam_pos_y_entry.pack(side=tk.LEFT, padx=2)
-
-        self.cam_pos_z_entry = ttk.Entry(camera_row3, width=6)
-        self.cam_pos_z_entry.insert(0, '5')
-        self.cam_pos_z_entry.pack(side=tk.LEFT, padx=2)
-
-        ttk.Label(camera_row3, text='Цель (x,y,z):').pack(side=tk.LEFT, padx=(12, 2))
-        self.cam_target_x_entry = ttk.Entry(camera_row3, width=6)
-        self.cam_target_x_entry.insert(0, '0')
-        self.cam_target_x_entry.pack(side=tk.LEFT, padx=2)
-
-        self.cam_target_y_entry = ttk.Entry(camera_row3, width=6)
-        self.cam_target_y_entry.insert(0, '0')
-        self.cam_target_y_entry.pack(side=tk.LEFT, padx=2)
-
-        self.cam_target_z_entry = ttk.Entry(camera_row3, width=6)
-        self.cam_target_z_entry.insert(0, '0')
-        self.cam_target_z_entry.pack(side=tk.LEFT, padx=2)
-
-        ttk.Button(camera_row3, text='Установить', command=self.camera_set_position).pack(side=tk.LEFT, padx=6)
-        ttk.Button(camera_row3, text='Сброс', command=self.camera_reset).pack(side=tk.LEFT, padx=2)
-
-        camera_row4 = ttk.Frame(camera_frame)
-        camera_row4.pack(side=tk.TOP, fill=tk.X, pady=4)
-
-        ttk.Label(camera_row4, text='Автоматическое вращение:').pack(side=tk.LEFT, padx=(6, 4))
-        self.auto_rotate = tk.BooleanVar(value=False)
-        ttk.Checkbutton(camera_row4, text='Включить', variable=self.auto_rotate,
-                        command=self.toggle_auto_rotate).pack(
-            side=tk.LEFT, padx=2)
-
-        ttk.Label(camera_row4, text='Скорость (°/кадр):').pack(side=tk.LEFT, padx=(12, 2))
-        self.auto_rotate_speed_entry = ttk.Entry(camera_row4, width=6)
-        self.auto_rotate_speed_entry.insert(0, '2')
-        self.auto_rotate_speed_entry.pack(side=tk.LEFT, padx=2)
-
-        self.animation_id = None
-
-        # Панель преобразований
-        controls = ttk.LabelFrame(self.root, text='Преобразования')
-        controls.pack(side=tk.TOP, fill=tk.X, padx=8, pady=(0, 8))
-
-        # Смещение
-        trf1 = ttk.Frame(controls)
-        trf1.pack(side=tk.TOP, fill=tk.X, pady=4)
-        ttk.Label(trf1, text='Смещение: dx').pack(side=tk.LEFT)
-        self.dx_entry = ttk.Entry(trf1, width=6)
-        self.dx_entry.insert(0, '0')
-        self.dx_entry.pack(side=tk.LEFT, padx=(4, 8))
-        ttk.Label(trf1, text='dy').pack(side=tk.LEFT)
-        self.dy_entry = ttk.Entry(trf1, width=6)
-        self.dy_entry.insert(0, '0')
-        self.dy_entry.pack(side=tk.LEFT, padx=(4, 8))
-        ttk.Label(trf1, text='dz').pack(side=tk.LEFT)
-        self.dz_entry = ttk.Entry(trf1, width=6)
-        self.dz_entry.insert(0, '0')
-        self.dz_entry.pack(side=tk.LEFT, padx=(4, 8))
-        ttk.Button(trf1, text='Применить', command=self.apply_translate).pack(side=tk.LEFT, padx=6)
-
-        # Поворот
-        trf2 = ttk.Frame(controls)
-        trf2.pack(side=tk.TOP, fill=tk.X, pady=4)
-        ttk.Label(trf2, text='Поворот: ось').pack(side=tk.LEFT)
-        self.rot_axis_var = tk.StringVar(value='x')
-        self.rot_axis = ttk.Combobox(trf2, textvariable=self.rot_axis_var, values=['x', 'y', 'z'], state='readonly',
-                                     width=4)
-        self.rot_axis.pack(side=tk.LEFT, padx=(4, 8))
-        ttk.Label(trf2, text='угол (°)').pack(side=tk.LEFT)
-        self.angle_entry = ttk.Entry(trf2, width=8)
-        self.angle_entry.insert(0, '30')
-        self.angle_entry.pack(side=tk.LEFT, padx=(4, 8))
-        ttk.Button(trf2, text='Повернуть', command=self.apply_rotate).pack(side=tk.LEFT, padx=6)
-        ttk.Button(trf2, text='Повернуть (через центр)', command=self.apply_rotate_center).pack(side=tk.LEFT,
-                                                                                                padx=6)
-
-        # Масштаб
-        trf3 = ttk.Frame(controls)
-        trf3.pack(side=tk.TOP, fill=tk.X, pady=4)
-        ttk.Label(trf3, text='Масштаб: sx').pack(side=tk.LEFT)
-        self.sx_entry = ttk.Entry(trf3, width=6)
-        self.sx_entry.insert(0, '1')
-        self.sx_entry.pack(side=tk.LEFT, padx=(4, 8))
-        ttk.Label(trf3, text='sy').pack(side=tk.LEFT)
-        self.sy_entry = ttk.Entry(trf3, width=6)
-        self.sy_entry.insert(0, '1')
-        self.sy_entry.pack(side=tk.LEFT, padx=(4, 8))
-        ttk.Label(trf3, text='sz').pack(side=tk.LEFT)
-        self.sz_entry = ttk.Entry(trf3, width=6)
-        self.sz_entry.insert(0, '1')
-        self.sz_entry.pack(side=tk.LEFT, padx=(4, 8))
-        ttk.Button(trf3, text='Масштаб', command=self.apply_scale).pack(side=tk.LEFT, padx=6)
-
-        # Равномерный масштаб вокруг центра (одно число)
-        ttk.Label(trf3, text=' s').pack(side=tk.LEFT, padx=(12, 2))
-        self.s_uniform_entry = ttk.Entry(trf3, width=6)
-        self.s_uniform_entry.insert(0, '1')
-        self.s_uniform_entry.pack(side=tk.LEFT, padx=(2, 6))
-        ttk.Button(trf3, text='Масштаб (через центр)', command=self.apply_scale_center).pack(side=tk.LEFT, padx=6)
-
-        # Вращение вокруг произвольной прямой (p1 -> p2)
-        trf5 = ttk.Frame(controls)
-        trf5.pack(side=tk.TOP, fill=tk.X, pady=4)
-        ttk.Label(trf5, text='Поворот вокруг прямой:').pack(side=tk.LEFT)
-        ttk.Label(trf5, text='p1(x,y,z)').pack(side=tk.LEFT, padx=(8, 2))
-        self.p1x_entry = ttk.Entry(trf5, width=5);
-        self.p1x_entry.insert(0, '0');
-        self.p1x_entry.pack(side=tk.LEFT)
-        self.p1y_entry = ttk.Entry(trf5, width=5);
-        self.p1y_entry.insert(0, '0');
-        self.p1y_entry.pack(side=tk.LEFT)
-        self.p1z_entry = ttk.Entry(trf5, width=5);
-        self.p1z_entry.insert(0, '0');
-        self.p1z_entry.pack(side=tk.LEFT)
-        ttk.Label(trf5, text='p2(x,y,z)').pack(side=tk.LEFT, padx=(8, 2))
-        self.p2x_entry = ttk.Entry(trf5, width=5);
-        self.p2x_entry.insert(0, '0');
-        self.p2x_entry.pack(side=tk.LEFT)
-        self.p2y_entry = ttk.Entry(trf5, width=5);
-        self.p2y_entry.insert(0, '1');
-        self.p2y_entry.pack(side=tk.LEFT)
-        self.p2z_entry = ttk.Entry(trf5, width=5);
-        self.p2z_entry.insert(0, '0');
-        self.p2z_entry.pack(side=tk.LEFT)
-        ttk.Label(trf5, text='угол (°)').pack(side=tk.LEFT, padx=(8, 2))
-        self.angle_line_entry = ttk.Entry(trf5, width=7);
-        self.angle_line_entry.insert(0, '30');
-        self.angle_line_entry.pack(side=tk.LEFT)
-        ttk.Button(trf5, text='Повернуть (линия)', command=self.apply_rotate_line).pack(side=tk.LEFT, padx=6)
-
-        # Отражение
-        trf4 = ttk.Frame(controls)
-        trf4.pack(side=tk.TOP, fill=tk.X, pady=4)
-        ttk.Label(trf4, text='Отражение: плоскость').pack(side=tk.LEFT)
-        self.refl_plane_var = tk.StringVar(value='xy')
-        self.refl_plane = ttk.Combobox(trf4, textvariable=self.refl_plane_var, values=['xy', 'yz', 'xz'],
-                                       state='readonly', width=6)
-        self.refl_plane.pack(side=tk.LEFT, padx=(6, 10))
-        ttk.Button(trf4, text='Отразить', command=self.apply_reflect).pack(side=tk.LEFT, padx=6)
-
-        self.canvas = tk.Canvas(self.root, bg='white', width=800, height=600)
-        self.canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        # Большая область визуализации справа.
+        self.canvas = tk.Canvas(shell, bg='#f7f9fc', highlightthickness=0)
+        self.canvas.pack(side='right', fill='both', expand=True)
         self.canvas.bind('<Configure>', lambda e: self.redraw())
+
+        def section(title):
+            frame = ttk.LabelFrame(panel, text=title, padding=7)
+            frame.pack(fill='x', pady=4)
+            return frame
+
+        def entry(parent, value, width=7):
+            widget = ttk.Entry(parent, width=width)
+            widget.insert(0, str(value))
+            widget.pack(side='left', padx=2)
+            return widget
+
+        def row(parent):
+            frame = ttk.Frame(parent)
+            frame.pack(fill='x', pady=2)
+            return frame
+
+        def triple(parent, label, defaults):
+            ttk.Label(parent, text=label).pack(anchor='w', pady=(3, 1))
+            r = row(parent)
+            return [entry(r, v) for v in defaults]
+
+        # Модель и загрузка файлов.
+        f = section('Модель / сцена')
+        ttk.Label(f, text='Многогранник').pack(anchor='w')
+        self.poly_box = ttk.Combobox(
+            f, textvariable=self.poly_var, values=list(POLY_BUILDERS.keys()),
+            state='readonly', width=27
+        )
+        self.poly_box.pack(fill='x', pady=3)
+        self.poly_box.bind('<<ComboboxSelected>>', lambda e: self.rebuild_model())
+        r = row(f)
+        ttk.Button(r, text='Открыть OBJ', command=self.load_obj).pack(side='left', fill='x', expand=True)
+        ttk.Button(r, text='Сохранить', command=self.save_obj).pack(side='left', fill='x', expand=True, padx=(5, 0))
+        ttk.Button(f, text='Сбросить модель', command=self.rebuild_model).pack(fill='x', pady=2)
+
+        # Способы отображения и проекции.
+        f = section('Режим отображения')
+        for title, value in [
+            ('Каркас', 'wireframe'), ('Гуро (Ламберт)', 'gouraud'),
+            ('Фонг (туншейдинг)', 'phong'), ('Текстура', 'texture')
+        ]:
+            ttk.Radiobutton(f, text=title, variable=self.render_mode,
+                            value=value, command=self.redraw).pack(anchor='w', pady=1)
+        ttk.Label(f, text='Проекция:', font=('Arial', 9, 'bold')).pack(anchor='w', pady=(6, 1))
+        self.rb_persp = ttk.Radiobutton(f, text='Перспективная', value='perspective',
+                                       variable=self.proj_var, command=self.redraw)
+        self.rb_iso = ttk.Radiobutton(f, text='Аксонометрическая', value='isometric',
+                                     variable=self.proj_var, command=self.redraw)
+        self.rb_camera = ttk.Radiobutton(f, text='Камера', value='camera',
+                                        variable=self.proj_var, command=self.redraw)
+        for control in (self.rb_persp, self.rb_iso, self.rb_camera):
+            control.pack(anchor='w')
+        # Сохраняем переменную render_combo для совместимости со старым кодом.
+        # Выбор режима теперь осуществляется радиокнопками выше.
+        self.render_combo = None
+
+        # Освещение.
+        f = section('Освещение')
+        self.light_x_entry, self.light_y_entry, self.light_z_entry = triple(
+            f, 'Позиция источника света (X, Y, Z)', ('2', '2', '5')
+        )
+        ttk.Button(f, text='Применить положение света',
+                   command=self.apply_light_position).pack(fill='x', pady=2)
+        self.mat_r_entry, self.mat_g_entry, self.mat_b_entry = triple(
+            f, 'Цвет объекта (R, G, B)', ('0.8', '0.8', '0.8')
+        )
+        ttk.Button(f, text='Применить цвет',
+                   command=self.apply_material_color).pack(fill='x', pady=2)
+
+        # Текстуры.
+        f = section('Текстурирование')
+        ttk.Label(f, text='Текстура').pack(anchor='w')
+        self.texture_combo = ttk.Combobox(
+            f, values=['checkerboard', 'gradient', 'loaded'], state='readonly', width=27
+        )
+        self.texture_combo.set(self.current_texture)
+        self.texture_combo.pack(fill='x', pady=3)
+        self.texture_combo.bind('<<ComboboxSelected>>', lambda e: self.change_texture())
+        ttk.Button(f, text='Загрузить текстуру', command=self.load_texture).pack(fill='x', pady=2)
+
+        # Камера — компактные кнопки в духе лабораторной № 8.
+        f = section('Камера')
+        ttk.Label(f, text='Шаг вращения (градусы)').pack(anchor='w')
+        r = row(f)
+        ttk.Label(r, text='Азимут').pack(side='left')
+        self.cam_azimuth_entry = entry(r, '10', 6)
+        ttk.Label(r, text='Высота').pack(side='left', padx=(6, 0))
+        self.cam_elevation_entry = entry(r, '10', 6)
+        r = row(f)
+        ttk.Button(r, text='◀ Влево', command=lambda: self.camera_orbit(-1, 0)).pack(
+            side='left', fill='x', expand=True
+        )
+        ttk.Button(r, text='Вправо ▶', command=lambda: self.camera_orbit(1, 0)).pack(
+            side='left', fill='x', expand=True
+        )
+        r = row(f)
+        ttk.Button(r, text='▲ Вверх', command=lambda: self.camera_orbit(0, 1)).pack(
+            side='left', fill='x', expand=True
+        )
+        ttk.Button(r, text='Вниз ▼', command=lambda: self.camera_orbit(0, -1)).pack(
+            side='left', fill='x', expand=True
+        )
+        r = row(f)
+        ttk.Label(r, text='Шаг приближения').pack(side='left')
+        self.cam_zoom_entry = entry(r, '0.5', 6)
+        r = row(f)
+        ttk.Button(r, text='+ Ближе', command=lambda: self.camera_zoom(1)).pack(
+            side='left', fill='x', expand=True
+        )
+        ttk.Button(r, text='− Дальше', command=lambda: self.camera_zoom(-1)).pack(
+            side='left', fill='x', expand=True
+        )
+        ttk.Label(f, text='Позиция камеры (X, Y, Z)').pack(anchor='w', pady=(5, 0))
+        r = row(f)
+        self.cam_pos_x_entry, self.cam_pos_y_entry, self.cam_pos_z_entry = [
+            entry(r, value) for value in ('0', '2', '5')
+        ]
+        ttk.Label(f, text='Цель камеры (X, Y, Z)').pack(anchor='w')
+        r = row(f)
+        self.cam_target_x_entry, self.cam_target_y_entry, self.cam_target_z_entry = [
+            entry(r, value) for value in ('0', '0', '0')
+        ]
+        r = row(f)
+        ttk.Button(r, text='Установить', command=self.camera_set_position).pack(
+            side='left', fill='x', expand=True
+        )
+        ttk.Button(r, text='Сброс камеры', command=self.camera_reset).pack(
+            side='left', fill='x', expand=True
+        )
+        # Возможность автовращения из исходной девятой лабораторной сохранена.
+        self.auto_rotate = tk.BooleanVar(value=False)
+        self.animation_id = None
+        r = row(f)
+        ttk.Checkbutton(r, text='Автовращение', variable=self.auto_rotate,
+                        command=self.toggle_auto_rotate).pack(side='left')
+        ttk.Label(r, text='°/кадр').pack(side='left', padx=(5, 1))
+        self.auto_rotate_speed_entry = entry(r, '2', 5)
+
+        # Аффинные преобразования.
+        f = section('Преобразования объекта')
+        self.dx_entry, self.dy_entry, self.dz_entry = triple(
+            f, 'Перенос (dx, dy, dz)', ('0', '0', '0')
+        )
+        ttk.Button(f, text='Переместить', command=self.apply_translate).pack(fill='x', pady=2)
+
+        r = row(f)
+        ttk.Label(r, text='Ось').pack(side='left')
+        self.rot_axis_var = tk.StringVar(value='x')
+        self.rot_axis = ttk.Combobox(r, textvariable=self.rot_axis_var,
+                                     values=['x', 'y', 'z'], state='readonly', width=4)
+        self.rot_axis.pack(side='left', padx=4)
+        ttk.Label(r, text='Угол').pack(side='left')
+        self.angle_entry = entry(r, '30', 7)
+        ttk.Button(f, text='Повернуть объект', command=self.apply_rotate).pack(fill='x', pady=2)
+        ttk.Button(f, text='Повернуть вокруг центра', command=self.apply_rotate_center).pack(fill='x', pady=2)
+
+        self.sx_entry, self.sy_entry, self.sz_entry = triple(
+            f, 'Масштаб (sx, sy, sz)', ('1', '1', '1')
+        )
+        ttk.Button(f, text='Масштабировать', command=self.apply_scale).pack(fill='x', pady=2)
+        r = row(f)
+        ttk.Label(r, text='Масштаб относительно центра').pack(side='left')
+        self.s_uniform_entry = entry(r, '1', 6)
+        ttk.Button(f, text='Применить масштаб к центру',
+                   command=self.apply_scale_center).pack(fill='x', pady=2)
+
+        ttk.Label(f, text='Поворот вокруг прямой (две точки)').pack(anchor='w', pady=(5, 0))
+        self.p1x_entry, self.p1y_entry, self.p1z_entry = triple(
+            f, 'Точка P1 (x, y, z)', ('0', '0', '0')
+        )
+        self.p2x_entry, self.p2y_entry, self.p2z_entry = triple(
+            f, 'Точка P2 (x, y, z)', ('0', '1', '0')
+        )
+        r = row(f)
+        ttk.Label(r, text='Угол').pack(side='left')
+        self.angle_line_entry = entry(r, '30')
+        ttk.Button(f, text='Вращать вокруг прямой',
+                   command=self.apply_rotate_line).pack(fill='x', pady=2)
+
+        r = row(f)
+        ttk.Label(r, text='Отражение').pack(side='left')
+        self.refl_plane_var = tk.StringVar(value='xy')
+        self.refl_plane = ttk.Combobox(r, textvariable=self.refl_plane_var,
+                                       values=['xy', 'yz', 'xz'], state='readonly', width=6)
+        self.refl_plane.pack(side='left', padx=5)
+        ttk.Button(f, text='Отразить', command=self.apply_reflect).pack(fill='x', pady=2)
 
         self.redraw()
 
