@@ -329,37 +329,26 @@ class Camera:
         return normalize(direction)
 
     def get_view_matrix(self):
-        """
-        Возвращает матрицу вида (view matrix), которая преобразует мировые координаты
-        в координаты камеры.
-        """
-        # Вектор направления (от камеры к цели)
+        """Как в лабораторной № 8: камера направлена вдоль -Z."""
         forward = normalize(self.target - self.position)
-        # Правый вектор
         right = normalize(np.cross(forward, self.up))
-        # Истинный вектор вверх (перпендикулярен forward и right)
         true_up = np.cross(right, forward)
-
-        # Матрица вращения (переход в систему координат камеры)
         R = np.eye(4)
-        R[0, :3] = -right  # Инвертируем X для правильной визуализации
-        R[1, :3] = -true_up  # Инвертируем Y для правильной визуализации
-        R[2, :3] = -forward  # В системе камеры смотрим вдоль -Z
-
-        # Матрица переноса (перемещение мира так, чтобы камера была в начале координат)
-        T_mat = T(-self.position[0], -self.position[1], -self.position[2])
-
-        # View matrix = R * T
-        return R @ T_mat
+        R[0, :3] = right
+        R[1, :3] = true_up
+        R[2, :3] = -forward
+        return R @ T(*(-self.position))
 
     def get_projection_matrix(self):
-        """
-        Возвращает матрицу перспективной проекции.
-        Использует упрощенную модель с фокусным расстоянием.
-        """
-        # Вычисляем фокусное расстояние из угла обзора
+        """Матрица перспективы из лабораторной № 8."""
         f = 1.0 / np.tan(np.radians(self.fov / 2.0))
-        return perspective(f)
+        M = np.zeros((4, 4), dtype=float)
+        M[0, 0] = f / max(self.aspect, 1e-6)
+        M[1, 1] = f
+        M[2, 2] = -(self.far + self.near) / (self.far - self.near)
+        M[2, 3] = -2 * self.far * self.near / (self.far - self.near)
+        M[3, 2] = -1.0
+        return M
 
     def orbit_rotate(self, delta_theta, delta_phi):
         """
@@ -1304,131 +1293,149 @@ def rasterize_triangle_phong_zbuffer(zbuffer, vertices_2d, vertices_3d, vertex_n
         zbuffer.color_buffer[y, x] = colors
 
 # ЛАБ 9.2 — Растеризация с текстурой
-def rasterize_triangle_textured_zbuffer(zbuffer, vertices_2d, vertices_3d, tex_coords, texture, vertex_normals=None, view_dir=None, light=None, material=None):
-    """
-    Растеризует треугольник с ПЕРСПЕКТИВНО-КОРРЕКТНЫМ наложением текстуры.
-    """
+def rasterize_triangle_textured_zbuffer(zbuffer, vertices_2d, vertices_3d, tex_coords, texture, vertex_normals=None, view_dir=None, light=None, material=None, perspective=True):
+    """Текстурирование треугольника с Z-буфером и коррекцией перспективы."""
     if len(vertices_2d) != 3 or len(tex_coords) != 3:
         return
 
-    # Распаковка координат
-    # ВАЖНО: Нам нужна глубина (depth) от камеры.
-    # Если мы в режиме камеры, Z отрицательный. Глубина = -Z.
-    # Если в режиме 'perspective' (сдвиг на +5), Z положительный.
-    # Чтобы унифицировать, берем abs(z) или просто работаем с предположением, что камера смотрит вдоль Z.
-    # Для корректной интерполяции нам нужны значения 1/z.
-    
-    # Получаем глубину вершин (избегаем деления на 0)
-    z0 = vertices_3d[0][2]
-    z1 = vertices_3d[1][2]
-    z2 = vertices_3d[2][2]
-    
-    # Определяем, какая ориентация оси Z (зависит от режима проекции в project_points)
-    # Если все Z отрицательные (режим камеры), инвертируем для Z-буфера, чтобы "меньше" значило "ближе"
-    # Однако, Z-буфер хранит "расстояние". Используем abs() для надежности дистанции.
-    depth0 = abs(z0) if abs(z0) > 1e-5 else 1e-5
-    depth1 = abs(z1) if abs(z1) > 1e-5 else 1e-5
-    depth2 = abs(z2) if abs(z2) > 1e-5 else 1e-5
-
-    x0, y0 = vertices_2d[0]
-    x1, y1 = vertices_2d[1]
-    x2, y2 = vertices_2d[2]
-
-    # Предварительно вычисляем значения для перспективной коррекции
-    # Интерполировать будем: 1/z, u/z, v/z
-    inv_z0 = 1.0 / depth0
-    inv_z1 = 1.0 / depth1
-    inv_z2 = 1.0 / depth2
-
-    u0, v0 = tex_coords[0]
-    u1, v1 = tex_coords[1]
-    u2, v2 = tex_coords[2]
-
-    uz0 = u0 * inv_z0
-    vz0 = v0 * inv_z0
-    uz1 = u1 * inv_z1
-    vz1 = v1 * inv_z1
-    uz2 = u2 * inv_z2
-    vz2 = v2 * inv_z2
-
-    # Bounding box
-    min_x = max(0, int(min(x0, x1, x2)))
-    max_x = min(zbuffer.width, int(max(x0, x1, x2)) + 1)
-    min_y = max(0, int(min(y0, y1, y2)))
-    max_y = min(zbuffer.height, int(max(y0, y1, y2)) + 1)
-
-    # Оптимизация: выносим константы для барицентрических координат
-    denom = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2)
-    if abs(denom) < 1e-10:
+    points = np.asarray(vertices_2d, dtype=float)
+    verts = np.asarray(vertices_3d, dtype=float)
+    uv = np.asarray(tex_coords, dtype=float)
+    if not np.all(np.isfinite(points)):
         return
-    inv_denom = 1.0 / denom
 
-    for y in range(min_y, max_y):
-        # Центр пикселя
-        py = y + 0.5
-        for x in range(min_x, max_x):
-            px = x + 0.5
-            
-            # Вычисляем веса
-            w0 = ((y1 - y2) * (px - x2) + (x2 - x1) * (py - y2)) * inv_denom
-            w1 = ((y2 - y0) * (px - x2) + (x0 - x2) * (py - y2)) * inv_denom
-            w2 = 1.0 - w0 - w1
+    x0 = max(0, int(np.floor(points[:, 0].min())))
+    x1 = min(zbuffer.width, int(np.ceil(points[:, 0].max())) + 1)
+    y0 = max(0, int(np.floor(points[:, 1].min())))
+    y1 = min(zbuffer.height, int(np.ceil(points[:, 1].max())) + 1)
+    if x0 >= x1 or y0 >= y1:
+        return
 
-            if w0 >= 0 and w1 >= 0 and w2 >= 0:
-                # 1. Перспективно-корректная интерполяция глубины (Z-буфер)
-                # Z в экранном пространстве интерполируется как 1/z
-                current_inv_z = w0 * inv_z0 + w1 * inv_z1 + w2 * inv_z2
-                
-                if current_inv_z == 0: continue
-                z_current = 1.0 / current_inv_z # Реальная глубина пикселя
+    (ax, ay), (bx, by), (cx, cy) = points
+    den = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy)
+    if abs(den) < 1e-10:
+        return
 
-                # Проверка Z-буфера
-                # Мы используем положительную глубину, поэтому стандартная проверка (меньше = ближе) работает
-                if z_current < zbuffer.buffer[y, x]:
-                    
-                    # 2. Перспективная интерполяция текстурных координат
-                    # U = (u/z)_interp / (1/z)_interp
-                    u_interp = (w0 * uz0 + w1 * uz1 + w2 * uz2) * z_current
-                    v_interp = (w0 * vz0 + w1 * vz1 + w2 * vz2) * z_current
-                    
-                    # Получаем цвет текстуры
-                    color = get_texture_color(texture, u_interp, v_interp)
+    # Координаты центров всех пикселей прямоугольной области
+    yy, xx = np.mgrid[y0:y1, x0:x1]
+    px = xx + 0.5
+    py = yy + 0.5
 
-                    # 3. Освещение (по желанию, как в оригинале)
-                    if light is not None and material is not None and vertex_normals is not None:
-                        # Нормаль можно интерполировать линейно (приближение)
-                        # Для идеальной точности тоже нужна коррекция, но для нормалей это менее критично
-                        normal = interpolate_normal(vertex_normals, [w0, w1, w2])
-                        
-                        # Позиция для света
-                        # Линейная интерполяция координат тоже допустима для расчёта света
-                        pos_x = w0 * vertices_3d[0][0] + w1 * vertices_3d[1][0] + w2 * vertices_3d[2][0]
-                        pos_y = w0 * vertices_3d[0][1] + w1 * vertices_3d[1][1] + w2 * vertices_3d[2][1]
-                        pos_z = w0 * vertices_3d[0][2] + w1 * vertices_3d[1][2] + w2 * vertices_3d[2][2]
-                        pos_3d = np.array([pos_x, pos_y, pos_z])
-                        
-                        light_dir = normalize(light.position - pos_3d)
-                        
-                        # Создаем временный материал, где diffuse цвет берется из текстуры
-                        tex_material = Material(
-                            color=color, # Цвет текстуры вместо цвета материала
-                            ambient=material.ambient,
-                            diffuse=material.diffuse,
-                            specular=material.specular,
-                            shininess=material.shininess
-                        )
-                        
-                        if view_dir is not None:
-                            # Фонг (с использованием текстуры как диффузного цвета)
-                            final_color = phong_shading(normal, view_dir, light_dir, tex_material, light)
-                        else:
-                            final_color = lambert_shading(normal, light_dir, tex_material, light)
-                    else:
-                        final_color = color
+    # Барицентрические веса сразу для всех пикселей
+    w0 = ((by - cy) * (px - cx) + (cx - bx) * (py - cy)) / den
+    w1 = ((cy - ay) * (px - cx) + (ax - cx) * (py - cy)) / den
+    w2 = 1.0 - w0 - w1
 
-                    # Запись в буфер
-                    zbuffer.buffer[y, x] = z_current
-                    zbuffer.color_buffer[y, x] = np.clip(final_color, 0.0, 1.0)
+    # Перспективно-корректная интерполяция глубины
+    z_region = zbuffer.buffer[y0:y1, x0:x1]
+
+    valid = (
+        (w0 >= -1e-7) &
+        (w1 >= -1e-7) &
+        (w2 >= -1e-7)
+    )
+
+    if perspective:
+        # Перспективная проекция: интерполяция обратной глубины
+        depth_vertices = np.maximum(np.abs(verts[:, 2]), 1e-5)
+        inv_depth = 1.0 / depth_vertices
+
+        inv_z = (
+            w0 * inv_depth[0] +
+            w1 * inv_depth[1] +
+            w2 * inv_depth[2]
+        )
+
+        valid &= inv_z > 0
+
+        z = np.full_like(inv_z, np.inf)
+        z[valid] = 1.0 / inv_z[valid]
+
+    else:
+        # Аксонометрия: глубина интерполируется линейно
+        z = (
+            w0 * verts[0, 2] +
+            w1 * verts[1, 2] +
+            w2 * verts[2, 2]
+        )
+
+    visible = valid & np.isfinite(z) & (z < z_region)
+
+    if not np.any(visible):
+        return
+
+    # Дальше обрабатываем только видимые пиксели
+    a, b, c = w0[visible], w1[visible], w2[visible]
+    zv = z[visible]
+
+    # Перспективно-корректная интерполяция UV
+    if perspective:
+    # Перспективно-корректная интерполяция
+        u = (
+            a * uv[0, 0] * inv_depth[0] +
+            b * uv[1, 0] * inv_depth[1] +
+            c * uv[2, 0] * inv_depth[2]
+        ) * zv
+
+        v = (
+            a * uv[0, 1] * inv_depth[0] +
+            b * uv[1, 1] * inv_depth[1] +
+            c * uv[2, 1] * inv_depth[2]
+        ) * zv
+
+    else:
+        # Линейная интерполяция для аксонометрии
+        u = a * uv[0, 0] + b * uv[1, 0] + c * uv[2, 0]
+        v = a * uv[0, 1] + b * uv[1, 1] + c * uv[2, 1]
+
+    # Получение цветов из текстуры сразу для всех пикселей
+    if texture is None:
+        colors = np.ones((len(u), 3), dtype=float)
+    else:
+        th, tw = texture.shape[:2]
+        tx = (np.clip(u, 0.0, 1.0) * (tw - 1)).astype(int)
+        ty = (np.clip(v, 0.0, 1.0) * (th - 1)).astype(int)
+        colors = np.asarray(texture[ty, tx, :3], dtype=float) / 255.0
+
+    # Освещение текстуры
+    if light is not None and material is not None and vertex_normals is not None:
+        normals = np.asarray(vertex_normals, dtype=float)
+
+        # Интерполяция нормалей и нормализация
+        n = a[:, None] * normals[0] + b[:, None] * normals[1] + c[:, None] * normals[2]
+        n_len = np.linalg.norm(n, axis=1, keepdims=True)
+        n = np.divide(n, n_len, out=np.zeros_like(n), where=n_len > 0)
+
+        # Интерполяция положения точки
+        pos = a[:, None] * verts[0] + b[:, None] * verts[1] + c[:, None] * verts[2]
+
+        # Направление к источнику света
+        ld = np.asarray(light.position, dtype=float) - pos
+        ld_len = np.linalg.norm(ld, axis=1, keepdims=True)
+        ld = np.divide(ld, ld_len, out=np.zeros_like(ld), where=ld_len > 0)
+
+        cos_theta = np.maximum(0.0, np.sum(n * ld, axis=1))
+        diffuse = material.diffuse * cos_theta[:, None]
+        light_color = np.asarray(light.color, dtype=float)
+
+        # Фоновое и диффузное освещение
+        result = (material.ambient * colors +
+                  diffuse * colors * light_color * light.intensity)
+
+        # Зеркальное освещение, если задано направление взгляда
+        if view_dir is not None:
+            reflection = 2.0 * cos_theta[:, None] * n - ld
+            view = np.asarray(view_dir, dtype=float)
+            cos_alpha = np.maximum(0.0, reflection @ view)
+            specular = material.specular * (cos_alpha ** material.shininess)
+            result += specular[:, None] * light_color * light.intensity
+
+        colors = result
+
+    # Запись глубины и цветов только для видимых пикселей
+    z_region[visible] = zv
+    color_region = zbuffer.color_buffer[y0:y1, x0:x1]
+    color_region[visible] = np.clip(colors, 0.0, 1.0)
 
 
 # --------------------
@@ -1440,8 +1447,61 @@ POLY_BUILDERS = {
     'Гексаэдр (куб)': hexahedron,
     'Октаэдр': octahedron,
     'Икосаэдр': icosahedron,
-    'Додекаэдр': dodecahedron,
 }
+
+
+# ЛАБ 9.2 — UV-координаты для текстурирования
+def ensure_texture_coordinates(poly):
+    """Задаёт UV-координаты граням, у которых их ещё нет."""
+
+    for face in poly.faces:
+        n = len(face.indices)
+
+        if n < 3:
+            continue
+
+        # Если OBJ уже содержит корректные UV, сохраняем их
+        if (
+            len(face.tex_coords) == n
+            and all(
+                0 <= idx < len(poly.tex_coords)
+                for idx in face.tex_coords
+            )
+        ):
+            continue
+
+        if n == 3:
+            # Треугольная грань
+            uv = [
+                (0.0, 0.0),
+                (1.0, 0.0),
+                (0.5, 0.866)
+            ]
+
+        elif n == 4:
+            # Четырёхугольная грань
+            uv = [
+                (0.0, 0.0),
+                (1.0, 0.0),
+                (1.0, 1.0),
+                (0.0, 1.0)
+            ]
+
+        else:
+            # Резервная раскладка для многоугольников
+            angles = np.linspace(0, 2 * np.pi, n, endpoint=False)
+            uv = [
+                (0.5 + 0.5 * np.cos(a),
+                 0.5 + 0.5 * np.sin(a))
+                for a in angles
+            ]
+
+        face.tex_coords = []
+
+        for coord in uv:
+            index = len(poly.tex_coords)
+            poly.tex_coords.append(coord)
+            face.tex_coords.append(index)
 
 
 # ЛАБ 6 — Выбор многогранника
@@ -1454,78 +1514,51 @@ def make_poly(name: str) -> Polyhedron:
 
 
 # ЛАБ 6 и 8 — Проекция и подготовка граней
-def project_points(P: Polyhedron, proj_mode: str, f: float = 1.8, view_vector=None, cull_backfaces=False, camera=None):
-    """Возвращает 2D проекцию вершин и 3D координаты после преобразований."""
+def project_points(P: Polyhedron, proj_mode: str, f=1.8, view_vector=None,
+                   cull_backfaces=False, camera=None):
+    """Проекция на экран. Перспективная/Камера используют одно положение камеры.
+
+    Сначала мировые координаты переводятся в координаты камеры, затем
+    в нормализованные экранные координаты. Для изометрии — ортографический вид.
+    """
     Q = P.copy()
-
-    # Применяем трансформации
-    if proj_mode == 'camera' and camera is not None:
-        view_matrix = camera.get_view_matrix()
-        Q = Q.apply(view_matrix)
-    elif proj_mode == 'perspective':
-        Q = Q.translate(0, 0, 5.0)
+    if proj_mode == 'isometric':
+        Q.apply(Rx(35.264389682754654) @ Rz(45.0))
+        pts = Q.V[:3] / Q.V[3]
+        diameter = max(float(np.linalg.norm(np.ptp(pts, axis=1))), 0.01)
+        half_height = diameter * 0.72
+        aspect = camera.aspect if camera is not None else 1.0
+        x = pts[0] / (half_height * aspect)
+        y = pts[1] / half_height
+        # Ортографический вид: направление взгляда от объекта вдоль +Z.
+        eye = np.array([0.0, 0.0, 1.0])
+        valid = np.ones(Q.V.shape[1], dtype=bool)
     else:
-        alpha = 35.264389682754654
-        beta = 45.0
-        Q = Q.apply(Rx(alpha) @ Rz(beta))
-
-    # Получаем 3D координаты после преобразований (до проекции)
-    vertices_3d = Q.V[:3, :] / Q.V[3, :]
-    
-    # Пересчитываем нормали граней после преобразований для корректного отсечения
-    # (хотя они уже преобразованы в apply(), пересчет гарантирует корректность)
-    Q.compute_face_normals()
-    Q.compute_vertex_normals()
-
-    # Теперь применяем проекцию
-    if proj_mode == 'camera' and camera is not None:
-        M = camera.get_projection_matrix()
-    elif proj_mode == 'perspective':
-        M = perspective(f)
-    else:
-        M = ortho_xy()
-
-    x, y = Q.projected(M)
-
-    # ЛАБ 8.1 — Отсечение нелицевых граней
-    # Удаление нелицевых граней (backface culling)
-    # Вычисляем направление взгляда в зависимости от режима проекции
-    # Важно: нормали граней уже преобразованы в методе apply(), поэтому
-    # направление взгляда должно быть в той же системе координат
-    if proj_mode == 'camera' and camera is not None:
-        # В системе координат камеры после применения view_matrix
-        # камера находится в начале координат и смотрит вдоль -Z
-        # Видимые грани имеют нормали, направленные к камере (в сторону +Z)
-        view_dir = np.array([0.0, 0.0, 1.0])
-    elif proj_mode == 'perspective':
-        # Для перспективной проекции объект перемещен на (0, 0, 5.0)
-        # Камера в начале координат смотрит вдоль +Z
-        # Направление от камеры к объекту = [0, 0, 1]
-        view_dir = np.array([0.0, 0.0, 1.0])
-    else:
-        # Для изометрической проекции применены повороты Rx(alpha) @ Rz(beta)
-        # Направление взгляда = результат применения этих поворотов к [0, 0, 1]
-        # (исходная ось Z после преобразований)
-        alpha = 35.264389682754654
-        beta = 45.0
-        # Применяем прямые повороты к вектору [0, 0, 1]
-        R = Rx(alpha) @ Rz(beta)
-        view_dir = normalize(R[:3, :3] @ np.array([0.0, 0.0, 1.0]))
-    
-    # Фильтруем грани: оставляем только те, нормали которых направлены к камере
-    visible_faces = []
+        if camera is None:
+            raise ValueError('Для перспективы требуется камера')
+        Q.apply(camera.get_view_matrix())
+        pts = Q.V[:3] / Q.V[3]
+        clip = camera.get_projection_matrix() @ Q.V
+        w = clip[3]
+        valid = np.isfinite(w) & (w > camera.near)
+        x = np.divide(clip[0], w, out=np.full_like(w, np.nan), where=valid)
+        y = np.divide(clip[1], w, out=np.full_like(w, np.nan), where=valid)
+    visible = []
     for face in Q.faces:
-        if face.normal is None:
+        if len(face.indices) < 3 or not np.all(valid[face.indices]):
             continue
-        # Вычисляем скалярное произведение нормали грани и направления взгляда
-        # Если > 0, грань видима (нормаль направлена к камере)
-        dot_product = np.dot(face.normal, view_dir)
-        if dot_product > 0:
-            visible_faces.append(face)
-    
-    edges = Q.edges()
-
-    return (x, y, edges, visible_faces, Q, vertices_3d)
+        normal = face.normal
+        if normal is None:
+            continue
+    # ЛАБ 8.1 — Отсечение нелицевых граней
+        if proj_mode == 'isometric':
+            front = np.dot(normal, eye) > 0
+        else:
+            face_center = np.mean(pts[:, face.indices], axis=1)
+            front = np.dot(normal, -face_center) > 0
+        if front:
+            visible.append(face)
+    return x, y, Q.edges(), visible, Q, pts
 
 
 def to_pixels(x, y, width, height, scale=120.0):
@@ -1561,6 +1594,7 @@ class App:
 
         # Камера
         self.camera = Camera(position=[0, 2, 5], target=[0, 0, 0], up=[0, 1, 0])
+        self.drag = None
 
         # Освещение
         self.light = Light(position=[2, 2, 5], color=(1.0, 1.0, 1.0), intensity=1.0)
@@ -1576,6 +1610,8 @@ class App:
 
         # Создаем интерфейс
         self.create_ui()
+        self.fit_camera()
+        self.redraw()
 
     def create_ui(self):
         """Боковая прокручиваемая панель в стиле лабораторной № 8."""
@@ -1607,6 +1643,11 @@ class App:
         self.canvas = tk.Canvas(shell, bg='#f7f9fc', highlightthickness=0)
         self.canvas.pack(side='right', fill='both', expand=True)
         self.canvas.bind('<Configure>', lambda e: self.redraw())
+        self.canvas.bind('<ButtonPress-1>', self.start_drag)
+        self.canvas.bind('<B1-Motion>', self.drag_camera)
+        self.canvas.bind('<MouseWheel>', lambda e: self.camera_zoom(1 if e.delta > 0 else -1))
+        self.canvas.bind('<Button-4>', lambda e: self.camera_zoom(1))
+        self.canvas.bind('<Button-5>', lambda e: self.camera_zoom(-1))
 
         def section(title):
             frame = ttk.LabelFrame(panel, text=title, padding=7)
@@ -1846,6 +1887,7 @@ class App:
 
     def rebuild_model(self):
         self.model = make_poly(self.poly_var.get())
+        self.fit_camera()
         self.redraw()
 
     # ЛАБ 8.1 — Направление обзора
@@ -1946,10 +1988,38 @@ class App:
         self.update_camera_fields()
         self.redraw()
 
+    def _bounds(self):
+        pts = (self.model.V[:3] / self.model.V[3]).T
+        lo, hi = pts.min(axis=0), pts.max(axis=0)
+        return (lo + hi) / 2, max(float(np.linalg.norm(hi - lo)), 0.01)
+
+    def fit_camera(self):
+        center, diameter = self._bounds()
+        self.camera.reset(position=center + np.array([diameter * 1.05, diameter * .30,
+                                                      diameter * .60]), target=center)
+        self.update_camera_fields()
+
+    def start_drag(self, event):
+        self.drag = (event.x, event.y)
+
+    def drag_camera(self, event):
+        if self.drag is not None:
+            dx, dy = event.x - self.drag[0], event.y - self.drag[1]
+            self.drag = (event.x, event.y)
+            self.camera.orbit_rotate(-dx * .45, dy * .45)
+            self.update_camera_fields()
+            self.redraw()
+
     def camera_zoom(self, direction):
-        """Приближает или отдаляет камеру."""
-        zoom_step = self._parse_float(self.cam_zoom_entry, 0.5)
-        self.camera.zoom(direction * zoom_step)
+        radius = self.camera.orbit_radius
+        _, diameter = self._bounds()
+        min_radius = max(0.5, diameter * .65)
+        max_radius = diameter * 20.0
+        new_radius = float(np.clip(radius - direction * radius * .12,
+                                   min_radius, max_radius))
+        vec = normalize(self.camera.position - self.camera.target)
+        self.camera.orbit_radius = new_radius
+        self.camera.position = self.camera.target + vec * new_radius
         self.update_camera_fields()
         self.redraw()
 
@@ -1970,9 +2040,7 @@ class App:
         self.redraw()
 
     def camera_reset(self):
-        """Сбрасывает камеру в начальное положение."""
-        self.camera.reset(position=[0, 2, 5], target=[0, 0, 0])
-        self.update_camera_fields()
+        self.fit_camera()
         self.redraw()
 
     def update_camera_fields(self):
@@ -2037,6 +2105,8 @@ class App:
         P = self.get_poly()
         mode = self.proj_var.get()
         render_mode = self.render_mode.get()
+        if render_mode == 'texture':
+            ensure_texture_coordinates(P)
 
         # Обновляем aspect ratio камеры
         if W > 0 and H > 0:
@@ -2048,12 +2118,15 @@ class App:
         )
 
         # Преобразуем в пиксели
-        Xs, Ys = to_pixels(x, y, W, H, scale=120.0)
+        Xs = (x + 1.0) * W * 0.5
+        Ys = (1.0 - y) * H * 0.5
 
         if render_mode == 'wireframe':
             # Для каркасного режима рисуем как раньше
             for a, b in edges:
-                self.canvas.create_line(float(Xs[a]), float(Ys[a]), float(Xs[b]), float(Ys[b]), fill='#1f77b4')
+                coords = [Xs[a], Ys[a], Xs[b], Ys[b]]
+                if np.all(np.isfinite(coords)):
+                    self.canvas.create_line(*map(float, coords), fill='#1f77b4')
         else:
             # ЛАБ 8.2 — Создание Z-буфера
             # Создаем z-буфер
@@ -2066,8 +2139,8 @@ class App:
                     view_matrix = self.camera.get_view_matrix()
                     depth_sign = -1.0
                 elif mode == 'perspective':
-                    view_matrix = T(0, 0, 5.0)
-                    depth_sign = 1.0
+                    view_matrix = self.camera.get_view_matrix()
+                    depth_sign = -1.0
                 else:
                     view_matrix = Rx(35.264389682754654) @ Rz(45.0)
                     depth_sign = -1.0
@@ -2096,7 +2169,17 @@ class App:
 
                 # Подготавливаем данные для грани
                 face_vertices_2d = [(float(Xs[i]), float(Ys[i])) for i in face.indices]
-                face_vertices_3d = [vertices_3d[:, i] for i in face.indices]
+                if render_mode != 'phong':
+                    # Глубина для текстуры и Гуро: меньшая положительная глубина ближе.
+                    if mode == 'isometric':
+                        depth_values = np.max(vertices_3d[2]) - vertices_3d[2] + 1.0
+                    else:
+                        depth_values = -vertices_3d[2]
+                    face_vertices_3d = [np.array([vertices_3d[0, i], vertices_3d[1, i], depth_values[i]])
+                                        for i in face.indices]
+                else:
+                    # Фонг Алёны получает исходные координаты камеры и свой depth_sign.
+                    face_vertices_3d = [vertices_3d[:, i] for i in face.indices]
 
                 # ЛАБ 9.1.1 — Отрисовка Гуро
                 if render_mode == 'gouraud':
@@ -2145,111 +2228,32 @@ class App:
                     view_dir = np.array([0, 0, 1])  # Направление взгляда для освещения
                     vertex_normals = face.vertex_normals if face.vertex_normals else [face.normal] * len(face.indices)
 
-                    # Генерируем текстурные координаты если их нет
-                    if not hasattr(face, 'tex_coords') or not face.tex_coords:
-                        # Генерируем текстурные координаты на основе локальной системы координат грани
-                        # Используем рёбра грани как базисные векторы для стабильности при поворотах
-                        if len(face.indices) >= 3:
-                            # Берем первую вершину как начало координат
-                            v0 = vertices_3d[:, face.indices[0]]
-                            
-                            # Первое ребро (от v0 к v1) - направление U
-                            v1 = vertices_3d[:, face.indices[1]]
-                            edge_u_raw = v1 - v0
-                            len_u = np.linalg.norm(edge_u_raw)
-                            
-                            if len_u < 1e-10:
-                                # Если первое ребро нулевое, используем запасной вариант
-                                edge_u = np.array([1.0, 0.0, 0.0])
-                                len_u = 1.0
-                            else:
-                                edge_u = edge_u_raw / len_u  # Нормализованный вектор для направления
-                            
-                            # Второе ребро (от v0 к v2) - направление V
-                            v2 = vertices_3d[:, face.indices[2]]
-                            edge_v_raw = v2 - v0
-                            
-                            # Ортогонализуем edge_v относительно edge_u (процесс Грама-Шмидта)
-                            # Проецируем edge_v_raw на edge_u и вычитаем проекцию
-                            proj_v_on_u = np.dot(edge_v_raw, edge_u) * edge_u
-                            edge_v_ortho = edge_v_raw - proj_v_on_u
-                            len_v = np.linalg.norm(edge_v_ortho)
-                            
-                            if len_v < 1e-10:
-                                # Если edge_v параллелен edge_u, используем нормаль грани
-                                face_normal = face.normal if face.normal is not None else np.array([0, 0, 1])
-                                # Находим вектор, перпендикулярный edge_u
-                                if abs(edge_u[0]) < 0.9:
-                                    temp = np.array([1.0, 0.0, 0.0])
-                                else:
-                                    temp = np.array([0.0, 1.0, 0.0])
-                                edge_v_ortho = np.cross(edge_u, temp)
-                                edge_v_ortho = edge_v_ortho - np.dot(edge_v_ortho, edge_u) * edge_u
-                                len_v = np.linalg.norm(edge_v_ortho)
-                                if len_v < 1e-10:
-                                    edge_v_ortho = np.cross(edge_u, face_normal)
-                                    len_v = np.linalg.norm(edge_v_ortho)
-                                    if len_v < 1e-10:
-                                        edge_v_ortho = np.array([0.0, 1.0, 0.0])
-                                        len_v = 1.0
-                            
-                            edge_v = edge_v_ortho / len_v  # Нормализованный вектор для направления
-                            
-                            # Теперь проецируем все вершины грани на локальную систему координат (edge_u, edge_v)
-                            tex_coords = []
-                            for vertex_idx in face.indices:
-                                vertex_pos = vertices_3d[:, vertex_idx]
-                                # Вектор от v0 к текущей вершине
-                                vec = vertex_pos - v0
-                                
-                                # Проецируем на edge_u и edge_v (используем нормализованные векторы)
-                                u = np.dot(vec, edge_u)
-                                v = np.dot(vec, edge_v)
-                                
-                                tex_coords.append([u, v])
-                            
-                            # Находим минимальные и максимальные значения для нормализации к [0, 1]
-                            tex_coords_array = np.array(tex_coords)
-                            min_u, min_v = np.min(tex_coords_array, axis=0)
-                            max_u, max_v = np.max(tex_coords_array, axis=0)
-                            
-                            range_u = max_u - min_u
-                            range_v = max_v - min_v
-                            
-                            # Избегаем деления на ноль
-                            if range_u < 1e-10:
-                                range_u = 1.0
-                            if range_v < 1e-10:
-                                range_v = 1.0
-                            
-                            # Нормализуем к [0, 1]
-                            for i in range(len(tex_coords)):
-                                tex_coords[i][0] = float((tex_coords[i][0] - min_u) / range_u)
-                                tex_coords[i][1] = float((tex_coords[i][1] - min_v) / range_v)
-                        else:
-                            # Для граней с менее чем 3 вершинами используем простые координаты
-                            tex_coords = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]][:len(face.indices)]
-                    else:
-                        tex_coords = [np.array(self.model.tex_coords[tc_idx], dtype=float) for tc_idx in
-                                      face.tex_coords]
+                    # ЛАБ 9.2 — Заранее назначенные UV-координаты вершин грани
+                    tex_coords = [
+                        np.asarray(transformed_poly.tex_coords[idx], dtype=float)
+                        for idx in face.tex_coords
+                    ]
 
                     if len(face.indices) == 3:
                         rasterize_triangle_textured_zbuffer(zbuffer, face_vertices_2d, face_vertices_3d, tex_coords,
-                                                            texture, vertex_normals, view_dir, self.light, self.material)
+                                                            texture, vertex_normals, view_dir, self.light, self.material,
+                                                            perspective=(mode != 'isometric'))
                     elif len(face.indices) == 4:
                         tri1_2d = [face_vertices_2d[0], face_vertices_2d[1], face_vertices_2d[2]]
                         tri1_3d = [face_vertices_3d[0], face_vertices_3d[1], face_vertices_3d[2]]
                         tri1_tex_coords = [tex_coords[0], tex_coords[1], tex_coords[2]]
                         tri1_normals = [vertex_normals[0], vertex_normals[1], vertex_normals[2]]
                         rasterize_triangle_textured_zbuffer(zbuffer, tri1_2d, tri1_3d, tri1_tex_coords, texture,
-                                                            tri1_normals, view_dir, self.light, self.material)
+                                                            tri1_normals, view_dir, self.light, self.material,
+                                                            perspective=(mode != 'isometric'))
 
                         tri2_2d = [face_vertices_2d[0], face_vertices_2d[2], face_vertices_2d[3]]
                         tri2_3d = [face_vertices_3d[0], face_vertices_3d[2], face_vertices_3d[3]]
                         tri2_tex_coords = [tex_coords[0], tex_coords[2], tex_coords[3]]
                         tri2_normals = [vertex_normals[0], vertex_normals[2], vertex_normals[3]]
                         rasterize_triangle_textured_zbuffer(zbuffer, tri2_2d, tri2_3d, tri2_tex_coords, texture,
-                                                            tri2_normals, view_dir, self.light, self.material)
+                                                            tri2_normals, view_dir, self.light, self.material,
+                                                            perspective=(mode != 'isometric'))
 
             # Отрисовываем z-буфер на canvas
             zbuffer.draw_to_canvas(self.canvas)
@@ -2268,6 +2272,7 @@ class App:
         if obj_model.load_from_file(filename):
             self.model = obj_model.polyhedron
             self.poly_var.set('(Загружено из OBJ)')
+            self.fit_camera()
             self.redraw()
             messagebox.showinfo("Успех", f"Модель успешно загружена из {filename}")
         else:
