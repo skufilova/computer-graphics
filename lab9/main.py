@@ -7,6 +7,7 @@ import colorsys
 
 
 # =========================================================================
+# ЛАБ 7.1 — Загрузка и сохранение OBJ (расширение ЛАБ 9: нормали и UV)
 # 1. OBJ файл (расширенный для поддержки нормалей и текстурных координат)
 # =========================================================================
 
@@ -179,6 +180,7 @@ def normalize(v):
 
 
 # --------------------
+# ЛАБ 6 — Матрицы аффинных преобразований
 # Матрицы преобразований (4x4, вектор-столбцы)
 # --------------------
 
@@ -262,6 +264,7 @@ def R_around_line(p1, p2, angle_deg):
 
 
 # --------------------
+# ЛАБ 6 — Перспективная проекция
 # Матрицы проекций
 # --------------------
 
@@ -277,6 +280,7 @@ def perspective(f=1.5):
 
 
 # --------------------
+# ЛАБ 8.3 — Камера
 # Класс камеры
 # --------------------
 
@@ -404,6 +408,7 @@ class Camera:
         self._update_orbit_angles()
 
 
+# ЛАБ 6 — Аксонометрическая проекция
 def ortho_xy():
     """Ортографическая проекция на плоскость XY (отбрасывание Z)."""
     M = np.eye(4)
@@ -421,6 +426,7 @@ def isometric_projection_matrix():
 
 
 # --------------------
+# ЛАБ 6 — Геометрические классы
 # Геометрические классы
 # --------------------
 
@@ -448,6 +454,7 @@ class PolygonFace:
         self.normal = None  # Вектор нормали грани
         self.vertex_normals = []  # Нормали вершин
 
+    # ЛАБ 8.1 — Нормаль грани
     def compute_normal(self, vertices, object_center=None):
         """
         Вычисляет вектор нормали грани через векторное произведение.
@@ -523,6 +530,7 @@ class Polyhedron:
         self.compute_face_normals()
         self.compute_vertex_normals()
 
+    # ЛАБ 8.1 — Нормали граней многогранника
     def compute_face_normals(self):
         """Вычисляет нормали для всех граней многогранника."""
         # Получаем 3D координаты вершин (без однородной координаты)
@@ -534,6 +542,7 @@ class Polyhedron:
         for face in self.faces:
             face.compute_normal(vertices_3d, center)
 
+    # ЛАБ 9.1 — Нормали вершин
     def compute_vertex_normals(self):
         """Вычисляет нормали вершин как среднее нормалей прилегающих граней."""
         vertices_3d = self.V[:3, :] / self.V[3, :]
@@ -580,10 +589,12 @@ class Polyhedron:
         pts = self.V[:3, :] / self.V[3, :]
         return np.mean(pts, axis=1)
 
+    # ЛАБ 6 — Матричное преобразование объекта
     def apply(self, M):
         """Применяет матричное преобразование 4x4."""
         self.V = M @ self.V
 
+        # ЛАБ 8.1 и 9.1 — Преобразование нормалей
         # Преобразуем нормали (используем обратную транспонированную матрицу для нормалей)
         M_3x3 = M[:3, :3]
         if np.linalg.det(M_3x3) != 0:
@@ -599,6 +610,7 @@ class Polyhedron:
 
         return self
 
+    # ЛАБ 6 — Аффинные преобразования
     # --- удобные методы преобразований (все через матрицы) ---
     def translate(self, dx, dy, dz):
         """Перенос (смещение)."""
@@ -672,6 +684,7 @@ class Polyhedron:
 
 
 # --------------------
+# ЛАБ 6 — Правильные многогранники
 # Правильные многогранники (Платоновы тела)
 # --------------------
 
@@ -843,6 +856,7 @@ def dodecahedron():
 
 
 # --------------------
+# ЛАБ 8.2 — Z-буфер
 # Класс ZBuffer
 # --------------------
 
@@ -899,6 +913,7 @@ class ZBuffer:
         canvas.image = photo
 
 # --------------------
+# ЛАБ 9.1 — Источник света и материал
 # Классы для освещения и материалов
 # --------------------
 
@@ -923,9 +938,11 @@ class Material:
 
 
 # --------------------
+# ЛАБ 9 — Модели освещения и интерполяция
 # Функции для освещения и шейдинга
 # --------------------
 
+# ЛАБ 9.1.1 — Модель Ламберта
 def lambert_shading(normal, light_dir, material, light):
     """Вычисляет диффузное освещение по модели Ламберта."""
     # Косинус угла между нормалью и направлением к свету
@@ -941,6 +958,7 @@ def lambert_shading(normal, light_dir, material, light):
     return ambient_color + diffuse_color
 
 
+# ЛАБ 9.2 — Модель Фонга для освещения текстуры
 def phong_shading(normal, view_dir, light_dir, material, light):
     """Вычисляет освещение по модели Фонга."""
     # Диффузная составляющая (Ламберт)
@@ -960,6 +978,7 @@ def phong_shading(normal, view_dir, light_dir, material, light):
     return ambient_color + diffuse_color + specular_color
 
 
+# ЛАБ 9.1.2 — Туншейдинг
 def toon_shading(normal, light_dir, material, light):
     """Вычисляет освещение по модели туншейдинга (toon shading).
     
@@ -990,6 +1009,7 @@ def toon_shading(normal, light_dir, material, light):
     return ambient_color + toon_color
 
 
+# ЛАБ 9.1.1 — Интерполяция цвета
 def interpolate_color(colors, weights):
     """Интерполирует цвет между вершинами с барицентрической интерполяцией.
     
@@ -1001,6 +1021,7 @@ def interpolate_color(colors, weights):
     return np.clip(result, 0.0, 1.0)
 
 
+# ЛАБ 9.1.2 — Интерполяция нормалей
 def interpolate_normal(normals, weights):
     """Интерполирует нормаль между вершинами с последующей нормализацией.
     
@@ -1014,6 +1035,7 @@ def interpolate_normal(normals, weights):
     return normalize(result)
 
 
+# ЛАБ 9.2 — Интерполяция текстурных координат
 def interpolate_tex_coord(tex_coords, weights):
     """Интерполирует текстурные координаты между вершинами."""
     result = np.zeros(2)
@@ -1025,6 +1047,7 @@ def interpolate_tex_coord(tex_coords, weights):
 
 
 # --------------------
+# ЛАБ 9.2 — Создание и загрузка текстур
 # Функции для текстурирования
 # --------------------
 
@@ -1116,6 +1139,7 @@ def get_texture_color(texture, u, v):
 # Функции для растеризации
 # --------------------
 
+# ЛАБ 9.1.1 — Растеризация Гуро
 def rasterize_triangle_gouraud_zbuffer(zbuffer, vertices_2d, vertices_3d, vertex_colors):
     """Растеризует треугольник с интерполяцией цвета по Гуро и z-буфером.
     
@@ -1172,6 +1196,7 @@ def rasterize_triangle_gouraud_zbuffer(zbuffer, vertices_2d, vertices_3d, vertex
                 zbuffer.test_and_set(x, y, z, color)
 
 
+# ЛАБ 9.1.2 — Растеризация Фонга с туншейдингом
 def rasterize_triangle_phong_zbuffer(zbuffer, vertices_2d, vertices_3d, vertex_normals, view_dir, light, material):
     """Растеризует треугольник с интерполяцией нормалей по Фонгу и туншейдингом.
     
@@ -1241,6 +1266,7 @@ def rasterize_triangle_phong_zbuffer(zbuffer, vertices_2d, vertices_3d, vertex_n
                 zbuffer.test_and_set(x, y, z, color)
 
 
+# ЛАБ 9.2 — Растеризация с текстурой
 def rasterize_triangle_textured_zbuffer(zbuffer, vertices_2d, vertices_3d, tex_coords, texture, vertex_normals=None, view_dir=None, light=None, material=None):
     """
     Растеризует треугольник с ПЕРСПЕКТИВНО-КОРРЕКТНЫМ наложением текстуры.
@@ -1381,6 +1407,7 @@ POLY_BUILDERS = {
 }
 
 
+# ЛАБ 6 — Выбор многогранника
 def make_poly(name: str) -> Polyhedron:
     """Создаёт выбранный многогранник без дополнительных поворотов/масштабов."""
     builder = POLY_BUILDERS.get(name)
@@ -1389,6 +1416,7 @@ def make_poly(name: str) -> Polyhedron:
     return builder()
 
 
+# ЛАБ 6 и 8 — Проекция и подготовка граней
 def project_points(P: Polyhedron, proj_mode: str, f: float = 1.8, view_vector=None, cull_backfaces=False, camera=None):
     """Возвращает 2D проекцию вершин и 3D координаты после преобразований."""
     Q = P.copy()
@@ -1422,6 +1450,7 @@ def project_points(P: Polyhedron, proj_mode: str, f: float = 1.8, view_vector=No
 
     x, y = Q.projected(M)
 
+    # ЛАБ 8.1 — Отсечение нелицевых граней
     # Удаление нелицевых граней (backface culling)
     # Вычисляем направление взгляда в зависимости от режима проекции
     # Важно: нормали граней уже преобразованы в методе apply(), поэтому
@@ -1563,6 +1592,7 @@ class App:
             r = row(parent)
             return [entry(r, v) for v in defaults]
 
+        # ЛАБ 6 и 7.1 — Выбор модели и OBJ
         # Модель и загрузка файлов.
         f = section('Модель / сцена')
         ttk.Label(f, text='Многогранник').pack(anchor='w')
@@ -1577,6 +1607,7 @@ class App:
         ttk.Button(r, text='Сохранить', command=self.save_obj).pack(side='left', fill='x', expand=True, padx=(5, 0))
         ttk.Button(f, text='Сбросить модель', command=self.rebuild_model).pack(fill='x', pady=2)
 
+        # ЛАБ 6, 8 и 9 — Проекции и режимы отображения
         # Способы отображения и проекции.
         f = section('Режим отображения')
         for title, value in [
@@ -1598,6 +1629,7 @@ class App:
         # Выбор режима теперь осуществляется радиокнопками выше.
         self.render_combo = None
 
+        # ЛАБ 9.1 — Управление освещением
         # Освещение.
         f = section('Освещение')
         self.light_x_entry, self.light_y_entry, self.light_z_entry = triple(
@@ -1611,6 +1643,7 @@ class App:
         ttk.Button(f, text='Применить цвет',
                    command=self.apply_material_color).pack(fill='x', pady=2)
 
+        # ЛАБ 9.2 — Управление текстурами
         # Текстуры.
         f = section('Текстурирование')
         ttk.Label(f, text='Текстура').pack(anchor='w')
@@ -1622,6 +1655,7 @@ class App:
         self.texture_combo.bind('<<ComboboxSelected>>', lambda e: self.change_texture())
         ttk.Button(f, text='Загрузить текстуру', command=self.load_texture).pack(fill='x', pady=2)
 
+        # ЛАБ 8.3 — Управление камерой
         # Камера — компактные кнопки в духе лабораторной № 8.
         f = section('Камера')
         ttk.Label(f, text='Шаг вращения (градусы)').pack(anchor='w')
@@ -1671,6 +1705,7 @@ class App:
         ttk.Button(r, text='Сброс камеры', command=self.camera_reset).pack(
             side='left', fill='x', expand=True
         )
+        # ЛАБ 8.3 — Автоматическое вращение камеры
         # Возможность автовращения из исходной девятой лабораторной сохранена.
         self.auto_rotate = tk.BooleanVar(value=False)
         self.animation_id = None
@@ -1680,6 +1715,7 @@ class App:
         ttk.Label(r, text='°/кадр').pack(side='left', padx=(5, 1))
         self.auto_rotate_speed_entry = entry(r, '2', 5)
 
+        # ЛАБ 6 — Управление преобразованиями
         # Аффинные преобразования.
         f = section('Преобразования объекта')
         self.dx_entry, self.dy_entry, self.dz_entry = triple(
@@ -1731,6 +1767,7 @@ class App:
 
         self.redraw()
 
+    # ЛАБ 9.1 — Настройка света и цвета
     def apply_light_position(self):
         """Применяет новую позицию источника света."""
         lx = self._parse_float(self.light_x_entry, 2.0)
@@ -1747,6 +1784,7 @@ class App:
         self.material.color = np.array([r, g, b])
         self.redraw()
 
+    # ЛАБ 9.2 — Выбор и загрузка текстуры
     def change_texture(self):
         """Изменяет текущую текстуру."""
         self.current_texture = self.texture_combo.get()
@@ -1773,6 +1811,7 @@ class App:
         self.model = make_poly(self.poly_var.get())
         self.redraw()
 
+    # ЛАБ 8.1 — Направление обзора
     def apply_view_vector(self):
         """Применяет новый вектор обзора из полей ввода."""
         vx = self._parse_float(self.view_x_entry, 0.0)
@@ -1787,6 +1826,7 @@ class App:
         except Exception:
             return default
 
+    # ЛАБ 6 — Обработчики преобразований
     def apply_translate(self):
         dx = self._parse_float(self.dx_entry, 0.0)
         dy = self._parse_float(self.dy_entry, 0.0)
@@ -1856,6 +1896,7 @@ class App:
         self.model.rotate_around_line(p1, p2, angle)
         self.redraw()
 
+    # ЛАБ 8.3 — Обработчики камеры
     def camera_orbit(self, direction_horizontal, direction_vertical):
         """Вращает камеру вокруг объекта."""
         azimuth = self._parse_float(self.cam_azimuth_entry, 10.0)
@@ -1977,6 +2018,7 @@ class App:
             for a, b in edges:
                 self.canvas.create_line(float(Xs[a]), float(Ys[a]), float(Xs[b]), float(Ys[b]), fill='#1f77b4')
         else:
+            # ЛАБ 8.2 — Создание Z-буфера
             # Создаем z-буфер
             zbuffer = ZBuffer(W, H)
             zbuffer.clear()
@@ -1990,6 +2032,7 @@ class App:
                 face_vertices_2d = [(float(Xs[i]), float(Ys[i])) for i in face.indices]
                 face_vertices_3d = [vertices_3d[:, i] for i in face.indices]
 
+                # ЛАБ 9.1.1 — Отрисовка Гуро
                 if render_mode == 'gouraud':
                     # Вычисляем цвета вершин
                     vertex_colors = []
@@ -2020,6 +2063,7 @@ class App:
                         tri2_colors = [vertex_colors[0], vertex_colors[2], vertex_colors[3]]
                         rasterize_triangle_gouraud_zbuffer(zbuffer, tri2_2d, tri2_3d, tri2_colors)
 
+                # ЛАБ 9.1.2 — Отрисовка Фонга с туншейдингом
                 elif render_mode == 'phong':
                     # Режим Фонга с туншейдингом:
                     # 1. Интерполируем нормали между вершинами (метод Фонга)
@@ -2044,6 +2088,7 @@ class App:
                         rasterize_triangle_phong_zbuffer(zbuffer, tri2_2d, tri2_3d, tri2_normals, view_dir, self.light,
                                                          self.material)
 
+                # ЛАБ 9.2 — Отрисовка текстуры
                 elif render_mode == 'texture':
                     texture = self.textures.get(self.current_texture)
                     view_dir = np.array([0, 0, 1])  # Направление взгляда для освещения
@@ -2158,6 +2203,7 @@ class App:
             # Отрисовываем z-буфер на canvas
             zbuffer.draw_to_canvas(self.canvas)
 
+    # ЛАБ 7.1 — Обработчики загрузки и сохранения OBJ
     def load_obj(self):
         """Загрузка модели из OBJ файла"""
         filename = filedialog.askopenfilename(
