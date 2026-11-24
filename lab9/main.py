@@ -7,6 +7,7 @@ import colorsys
 
 
 # =========================================================================
+# ЛАБ 7.1 — Загрузка и сохранение OBJ (расширение ЛАБ 9: нормали и UV)
 # 1. OBJ файл (расширенный для поддержки нормалей и текстурных координат)
 # =========================================================================
 
@@ -179,6 +180,7 @@ def normalize(v):
 
 
 # --------------------
+# ЛАБ 6 — Матрицы аффинных преобразований
 # Матрицы преобразований (4x4, вектор-столбцы)
 # --------------------
 
@@ -262,6 +264,7 @@ def R_around_line(p1, p2, angle_deg):
 
 
 # --------------------
+# ЛАБ 6 — Перспективная проекция
 # Матрицы проекций
 # --------------------
 
@@ -277,6 +280,7 @@ def perspective(f=1.5):
 
 
 # --------------------
+# ЛАБ 8.3 — Камера
 # Класс камеры
 # --------------------
 
@@ -325,37 +329,26 @@ class Camera:
         return normalize(direction)
 
     def get_view_matrix(self):
-        """
-        Возвращает матрицу вида (view matrix), которая преобразует мировые координаты
-        в координаты камеры.
-        """
-        # Вектор направления (от камеры к цели)
+        """Как в лабораторной № 8: камера направлена вдоль -Z."""
         forward = normalize(self.target - self.position)
-        # Правый вектор
         right = normalize(np.cross(forward, self.up))
-        # Истинный вектор вверх (перпендикулярен forward и right)
         true_up = np.cross(right, forward)
-
-        # Матрица вращения (переход в систему координат камеры)
         R = np.eye(4)
-        R[0, :3] = -right  # Инвертируем X для правильной визуализации
-        R[1, :3] = -true_up  # Инвертируем Y для правильной визуализации
-        R[2, :3] = -forward  # В системе камеры смотрим вдоль -Z
-
-        # Матрица переноса (перемещение мира так, чтобы камера была в начале координат)
-        T_mat = T(-self.position[0], -self.position[1], -self.position[2])
-
-        # View matrix = R * T
-        return R @ T_mat
+        R[0, :3] = right
+        R[1, :3] = true_up
+        R[2, :3] = -forward
+        return R @ T(*(-self.position))
 
     def get_projection_matrix(self):
-        """
-        Возвращает матрицу перспективной проекции.
-        Использует упрощенную модель с фокусным расстоянием.
-        """
-        # Вычисляем фокусное расстояние из угла обзора
+        """Матрица перспективы из лабораторной № 8."""
         f = 1.0 / np.tan(np.radians(self.fov / 2.0))
-        return perspective(f)
+        M = np.zeros((4, 4), dtype=float)
+        M[0, 0] = f / max(self.aspect, 1e-6)
+        M[1, 1] = f
+        M[2, 2] = -(self.far + self.near) / (self.far - self.near)
+        M[2, 3] = -2 * self.far * self.near / (self.far - self.near)
+        M[3, 2] = -1.0
+        return M
 
     def orbit_rotate(self, delta_theta, delta_phi):
         """
@@ -404,6 +397,7 @@ class Camera:
         self._update_orbit_angles()
 
 
+# ЛАБ 6 — Аксонометрическая проекция
 def ortho_xy():
     """Ортографическая проекция на плоскость XY (отбрасывание Z)."""
     M = np.eye(4)
@@ -421,6 +415,7 @@ def isometric_projection_matrix():
 
 
 # --------------------
+# ЛАБ 6 — Геометрические классы
 # Геометрические классы
 # --------------------
 
@@ -448,6 +443,7 @@ class PolygonFace:
         self.normal = None  # Вектор нормали грани
         self.vertex_normals = []  # Нормали вершин
 
+    # ЛАБ 8.1 — Нормаль грани
     def compute_normal(self, vertices, object_center=None):
         """
         Вычисляет вектор нормали грани через векторное произведение.
@@ -523,6 +519,7 @@ class Polyhedron:
         self.compute_face_normals()
         self.compute_vertex_normals()
 
+    # ЛАБ 8.1 — Нормали граней многогранника
     def compute_face_normals(self):
         """Вычисляет нормали для всех граней многогранника."""
         # Получаем 3D координаты вершин (без однородной координаты)
@@ -534,6 +531,7 @@ class Polyhedron:
         for face in self.faces:
             face.compute_normal(vertices_3d, center)
 
+    # ЛАБ 9.1 — Нормали вершин
     def compute_vertex_normals(self):
         """Вычисляет нормали вершин как среднее нормалей прилегающих граней."""
         vertices_3d = self.V[:3, :] / self.V[3, :]
@@ -580,10 +578,12 @@ class Polyhedron:
         pts = self.V[:3, :] / self.V[3, :]
         return np.mean(pts, axis=1)
 
+    # ЛАБ 6 — Матричное преобразование объекта
     def apply(self, M):
         """Применяет матричное преобразование 4x4."""
         self.V = M @ self.V
 
+        # ЛАБ 8.1 и 9.1 — Преобразование нормалей
         # Преобразуем нормали (используем обратную транспонированную матрицу для нормалей)
         M_3x3 = M[:3, :3]
         if np.linalg.det(M_3x3) != 0:
@@ -599,6 +599,7 @@ class Polyhedron:
 
         return self
 
+    # ЛАБ 6 — Аффинные преобразования
     # --- удобные методы преобразований (все через матрицы) ---
     def translate(self, dx, dy, dz):
         """Перенос (смещение)."""
@@ -672,6 +673,7 @@ class Polyhedron:
 
 
 # --------------------
+# ЛАБ 6 — Правильные многогранники
 # Правильные многогранники (Платоновы тела)
 # --------------------
 
@@ -843,6 +845,7 @@ def dodecahedron():
 
 
 # --------------------
+# ЛАБ 8.2 — Z-буфер
 # Класс ZBuffer
 # --------------------
 
@@ -899,6 +902,7 @@ class ZBuffer:
         canvas.image = photo
 
 # --------------------
+# ЛАБ 9.1 — Источник света и материал
 # Классы для освещения и материалов
 # --------------------
 
@@ -923,9 +927,11 @@ class Material:
 
 
 # --------------------
+# ЛАБ 9 — Модели освещения и интерполяция
 # Функции для освещения и шейдинга
 # --------------------
 
+# ЛАБ 9.1.1 — Модель Ламберта
 def lambert_shading(normal, light_dir, material, light):
     """Вычисляет диффузное освещение по модели Ламберта."""
     # Косинус угла между нормалью и направлением к свету
@@ -941,6 +947,7 @@ def lambert_shading(normal, light_dir, material, light):
     return ambient_color + diffuse_color
 
 
+# ЛАБ 9.2 — Модель Фонга для освещения текстуры
 def phong_shading(normal, view_dir, light_dir, material, light):
     """Вычисляет освещение по модели Фонга."""
     # Диффузная составляющая (Ламберт)
@@ -960,36 +967,43 @@ def phong_shading(normal, view_dir, light_dir, material, light):
     return ambient_color + diffuse_color + specular_color
 
 
+# ЛАБ 9.1.2 — Модель туншейдинга
 def toon_shading(normal, light_dir, material, light):
-    """Вычисляет освещение по модели туншейдинга (toon shading).
-    
-    Туншейдинг - это пороговое затенение, которое создает мультяшный эффект
-    с дискретными уровнями освещённости вместо плавного перехода.
-    """
-    # Вычисляем косинус угла между нормалью и направлением к свету
-    cos_theta = max(0.0, np.dot(normal, light_dir))
-    
-    # Определяем дискретные уровни освещённости (пороговые значения)
-    # Создаем 5 уровней яркости для более выразительного мультяшного эффекта
-    if cos_theta > 0.8:
-        intensity = 1.0  # Самый яркий (прямой свет)
-    elif cos_theta > 0.6:
-        intensity = 0.8  # Яркий
-    elif cos_theta > 0.4:
-        intensity = 0.6  # Средний
-    elif cos_theta > 0.2:
-        intensity = 0.4  # Тёмный
-    else:
-        intensity = 0.25  # Самый тёмный (но не чёрный)
-    
-    # Применяем дискретную интенсивность к цвету
-    # Уменьшаем вклад ambient для более выраженного эффекта
+    """Вычисляет цвет по модели туншейдинга."""
+
+    # Косинус угла между нормалью и направлением к свету
+    cos_theta = np.maximum(
+        0.0, np.sum(normal * light_dir, axis=-1)
+    )
+
+    # Пять дискретных уровней освещенности
+    intensity = np.select(
+        [
+            cos_theta > 0.8,
+            cos_theta > 0.6,
+            cos_theta > 0.4,
+            cos_theta > 0.2
+        ],
+        [1.0, 0.8, 0.6, 0.4],
+        default=0.25
+    )
+
+    # Фоновая составляющая освещения
     ambient_color = material.ambient * 0.3 * material.color
-    toon_color = intensity * material.diffuse * material.color * light.color * light.intensity
-    
+
+    # Диффузная составляющая с дискретной интенсивностью
+    toon_color = (
+        intensity[..., np.newaxis]
+        * material.diffuse
+        * material.color
+        * light.color
+        * light.intensity
+    )
+
     return ambient_color + toon_color
 
 
+# ЛАБ 9.1.1 — Интерполяция цвета
 def interpolate_color(colors, weights):
     """Интерполирует цвет между вершинами с барицентрической интерполяцией.
     
@@ -1001,19 +1015,21 @@ def interpolate_color(colors, weights):
     return np.clip(result, 0.0, 1.0)
 
 
+# ЛАБ 9.1.2 — Интерполяция нормалей
 def interpolate_normal(normals, weights):
-    """Интерполирует нормаль между вершинами с последующей нормализацией.
-    
-    Используется для метода Фонга - интерполяция нормалей между вершинами
-    с обязательной нормализацией результата.
-    """
-    result = np.zeros(3, dtype=float)
-    for i, normal in enumerate(normals):
-        result += weights[i] * np.array(normal, dtype=float)
-    # ВАЖНО: обязательная нормализация интерполированной нормали
-    return normalize(result)
+    """Интерполирует нормали и нормализует результат."""
+    normals = np.asarray(normals, dtype=float)
+    weights = np.asarray(weights, dtype=float)
+
+    result = weights @ normals
+
+    lengths = np.linalg.norm(result, axis=-1, keepdims=True)
+    lengths = np.where(lengths == 0, 1.0, lengths)
+
+    return result / lengths
 
 
+# ЛАБ 9.2 — Интерполяция текстурных координат
 def interpolate_tex_coord(tex_coords, weights):
     """Интерполирует текстурные координаты между вершинами."""
     result = np.zeros(2)
@@ -1025,6 +1041,7 @@ def interpolate_tex_coord(tex_coords, weights):
 
 
 # --------------------
+# ЛАБ 9.2 — Создание и загрузка текстур
 # Функции для текстурирования
 # --------------------
 
@@ -1116,6 +1133,7 @@ def get_texture_color(texture, u, v):
 # Функции для растеризации
 # --------------------
 
+# ЛАБ 9.1.1 — Растеризация Гуро
 def rasterize_triangle_gouraud_zbuffer(zbuffer, vertices_2d, vertices_3d, vertex_colors):
     """Растеризует треугольник с интерполяцией цвета по Гуро и z-буфером.
     
@@ -1172,200 +1190,252 @@ def rasterize_triangle_gouraud_zbuffer(zbuffer, vertices_2d, vertices_3d, vertex
                 zbuffer.test_and_set(x, y, z, color)
 
 
-def rasterize_triangle_phong_zbuffer(zbuffer, vertices_2d, vertices_3d, vertex_normals, view_dir, light, material):
-    """Растеризует треугольник с интерполяцией нормалей по Фонгу и туншейдингом.
-    
-    Метод Фонга (Phong Shading) с туншейдингом:
-    1. Интерполирует нормали между вершинами методом билинейной (барицентрической) интерполяции
-    2. Нормализует интерполированную нормаль для каждого пикселя
-    3. Вычисляет цвет по модели туншейдинга с интерполированной нормалью
-    
-    Билинейная интерполяция нормалей:
-    - normal(x,y) = normalize(w0*normal0 + w1*normal1 + w2*normal2)
-    - ВАЖНО: нормализация необходима после интерполяции!
-    """
-    if len(vertices_2d) != 3 or len(vertex_normals) != 3:
+# ЛАБ 9.1.2 — Растеризация Фонга с туншейдингом
+def rasterize_triangle_phong_zbuffer(zbuffer, vertices_2d, vertices_3d, vertex_normals, view_dir, light, material, depth_sign=1.0, perspective_correct=False):
+    """Шейдинг Фонга с билинейной интерполяцией по полосам выпуклой грани."""
+    points = np.asarray(vertices_2d, dtype=float)
+    positions = np.asarray(vertices_3d, dtype=float)
+    normals = np.asarray(vertex_normals, dtype=float)
+    n = len(points)
+    if n < 3 or len(normals) != n or len(positions) != n:
+        return
+    if not (np.all(np.isfinite(points)) and np.all(np.isfinite(positions)) and np.all(np.isfinite(normals))):
         return
 
-    x0, y0, z0 = vertices_2d[0][0], vertices_2d[0][1], vertices_3d[0][2]
-    x1, y1, z1 = vertices_2d[1][0], vertices_2d[1][1], vertices_3d[1][2]
-    x2, y2, z2 = vertices_2d[2][0], vertices_2d[2][1], vertices_3d[2][2]
+    if perspective_correct:
+        depth = depth_sign * positions[:, 2]
+        if np.any(depth <= 1e-8):
+            return
+        inv_depth = 1.0 / depth
+        positions = positions * inv_depth[:, None]
+        normals = normals * inv_depth[:, None]
+    else:
+        inv_depth = np.ones(n)
 
-    min_x = max(0, int(min(x0, x1, x2)))
-    max_x = min(zbuffer.width, int(max(x0, x1, x2)) + 1)
-    min_y = max(0, int(min(y0, y1, y2)))
-    max_y = min(zbuffer.height, int(max(y0, y1, y2)) + 1)
+    # Разбиваем грань на горизонтальные полосы по высотам вершин.
+    # В каждой полосе левая и правая границы являются отрезками.
+    levels = np.unique(points[:, 1])
+    for top, bottom in zip(levels[:-1], levels[1:]):
+        middle = (top + bottom) / 2
+        edges = []
+        for i in range(n):
+            j = (i + 1) % n
+            yi, yj = points[i, 1], points[j, 1]
+            if min(yi, yj) < middle < max(yi, yj):
+                a = (middle - yi) / (yj - yi)
+                edges.append((points[i, 0] + a * (points[j, 0] - points[i, 0]), i, j))
+        if len(edges) != 2:
+            continue
+        edges.sort()
 
-    def compute_barycentric_weights(x, y):
-        """Вычисляет барицентрические координаты для точки (x, y) в треугольнике."""
-        denom = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2)
-        if abs(denom) < 1e-10:
-            return None
+        # Четыре угла полосы: слева сверху, справа сверху,
+        # слева снизу, справа снизу. Нормали на ребрах не нормализуем.
+        corners_x = []
+        corners_pos = []
+        corners_normal = []
+        corners_inv_depth = []
+        for height in (top, bottom):
+            for _, i, j in edges:
+                a = (height - points[i, 1]) / (points[j, 1] - points[i, 1])
+                corners_x.append((1 - a) * points[i, 0] + a * points[j, 0])
+                corners_pos.append((1 - a) * positions[i] + a * positions[j])
+                corners_normal.append((1 - a) * normals[i] + a * normals[j])
+                corners_inv_depth.append((1 - a) * inv_depth[i] + a * inv_depth[j])
 
-        # Барицентрические координаты (веса)
-        w0 = ((y1 - y2) * (x - x2) + (x2 - x1) * (y - y2)) / denom
-        w1 = ((y2 - y0) * (x - x2) + (x0 - x2) * (y - y2)) / denom
-        w2 = 1.0 - w0 - w1
+        # Сетка центров пикселей в пределах полосы.
+        min_x = max(0, int(np.ceil(min(corners_x) - 0.5)))
+        max_x = min(zbuffer.width, int(np.floor(max(corners_x) - 0.5)) + 1)
+        min_y = max(0, int(np.ceil(top - 0.5)))
+        max_y = min(zbuffer.height, int(np.ceil(bottom - 0.5)))
+        if min_x >= max_x or min_y >= max_y:
+            continue
+        X, Y = np.meshgrid(np.arange(min_x, max_x), np.arange(min_y, max_y))
 
-        return w0, w1, w2
+        # Первый этап: линейная интерполяция вдоль левого и правого ребер.
+        t = (Y + 0.5 - top) / (bottom - top)
+        left = (1 - t) * corners_x[0] + t * corners_x[2]
+        right = (1 - t) * corners_x[1] + t * corners_x[3]
 
-    for y in range(min_y, max_y):
-        for x in range(min_x, max_x):
-            weights = compute_barycentric_weights(x + 0.5, y + 0.5)  # Центр пикселя
-            if weights is None:
-                continue
+        # Второй этап: линейная интерполяция между ребрами.
+        width = right - left
+        mask = (width > 0) & (X + 0.5 >= left) & (X + 0.5 <= right)
+        x, y = X[mask], Y[mask]
+        if x.size == 0:
+            continue
+        u = (x + 0.5 - left[mask]) / width[mask]
+        t = t[mask]
 
-            w0, w1, w2 = weights
+        # Билинейные веса четырех углов полосы.
+        weights = np.stack([
+            (1 - u) * (1 - t), u * (1 - t),
+            (1 - u) * t, u * t
+        ], axis=1)
 
-            # Проверка, что точка внутри треугольника
-            if w0 >= 0 and w1 >= 0 and w2 >= 0:
-                # Билинейная интерполяция z-координаты
-                z = w0 * z0 + w1 * z1 + w2 * z2
+        # Интерполяция координат и проверка Z-буфера.
+        pixel_pos = weights @ np.asarray(corners_pos)
+        if perspective_correct:
+            pixel_pos /= (weights @ np.asarray(corners_inv_depth))[:, None]
+        z = depth_sign * pixel_pos[:, 2]
+        visible = z < zbuffer.buffer[y, x]
+        x, y, z = x[visible], y[visible], z[visible]
+        if x.size == 0:
+            continue
 
-                # Билинейная интерполяция нормали с последующей нормализацией (метод Фонга)
-                normal = interpolate_normal(vertex_normals, [w0, w1, w2])
+        # Билинейная интерполяция нормалей с последующей нормализацией.
+        pixel_normals = interpolate_normal(corners_normal, weights[visible])
+        light_dirs = light.position - pixel_pos[visible]
+        lengths = np.linalg.norm(light_dirs, axis=1, keepdims=True)
+        light_dirs = light_dirs / np.where(lengths == 0, 1.0, lengths)
 
-                # Вычисляем интерполированную позицию для точного направления к свету
-                pos_x = w0 * vertices_3d[0][0] + w1 * vertices_3d[1][0] + w2 * vertices_3d[2][0]
-                pos_y = w0 * vertices_3d[0][1] + w1 * vertices_3d[1][1] + w2 * vertices_3d[2][1]
-                pos_z = z
-                pos_3d = np.array([pos_x, pos_y, pos_z], dtype=float)
+        # Вычисляем цвет каждого видимого пикселя по модели туншейдинга.
+        colors = toon_shading(pixel_normals, light_dirs, material, light)
+        zbuffer.buffer[y, x] = z
+        zbuffer.color_buffer[y, x] = colors
 
-                # Направление от точки к источнику света
-                light_dir = normalize(light.position - pos_3d)
-                
-                # Вычисляем цвет по модели туншейдинга с интерполированной нормалью
-                color = toon_shading(normal, light_dir, material, light)
-
-                # Тестируем и устанавливаем в z-буфер
-                zbuffer.test_and_set(x, y, z, color)
-
-
-def rasterize_triangle_textured_zbuffer(zbuffer, vertices_2d, vertices_3d, tex_coords, texture, vertex_normals=None, view_dir=None, light=None, material=None):
-    """
-    Растеризует треугольник с ПЕРСПЕКТИВНО-КОРРЕКТНЫМ наложением текстуры.
-    """
+# ЛАБ 9.2 — Растеризация с текстурой
+def rasterize_triangle_textured_zbuffer(zbuffer, vertices_2d, vertices_3d, tex_coords, texture, vertex_normals=None, view_dir=None, light=None, material=None, perspective=True):
+    """Текстурирование треугольника с Z-буфером и коррекцией перспективы."""
     if len(vertices_2d) != 3 or len(tex_coords) != 3:
         return
 
-    # Распаковка координат
-    # ВАЖНО: Нам нужна глубина (depth) от камеры.
-    # Если мы в режиме камеры, Z отрицательный. Глубина = -Z.
-    # Если в режиме 'perspective' (сдвиг на +5), Z положительный.
-    # Чтобы унифицировать, берем abs(z) или просто работаем с предположением, что камера смотрит вдоль Z.
-    # Для корректной интерполяции нам нужны значения 1/z.
-    
-    # Получаем глубину вершин (избегаем деления на 0)
-    z0 = vertices_3d[0][2]
-    z1 = vertices_3d[1][2]
-    z2 = vertices_3d[2][2]
-    
-    # Определяем, какая ориентация оси Z (зависит от режима проекции в project_points)
-    # Если все Z отрицательные (режим камеры), инвертируем для Z-буфера, чтобы "меньше" значило "ближе"
-    # Однако, Z-буфер хранит "расстояние". Используем abs() для надежности дистанции.
-    depth0 = abs(z0) if abs(z0) > 1e-5 else 1e-5
-    depth1 = abs(z1) if abs(z1) > 1e-5 else 1e-5
-    depth2 = abs(z2) if abs(z2) > 1e-5 else 1e-5
-
-    x0, y0 = vertices_2d[0]
-    x1, y1 = vertices_2d[1]
-    x2, y2 = vertices_2d[2]
-
-    # Предварительно вычисляем значения для перспективной коррекции
-    # Интерполировать будем: 1/z, u/z, v/z
-    inv_z0 = 1.0 / depth0
-    inv_z1 = 1.0 / depth1
-    inv_z2 = 1.0 / depth2
-
-    u0, v0 = tex_coords[0]
-    u1, v1 = tex_coords[1]
-    u2, v2 = tex_coords[2]
-
-    uz0 = u0 * inv_z0
-    vz0 = v0 * inv_z0
-    uz1 = u1 * inv_z1
-    vz1 = v1 * inv_z1
-    uz2 = u2 * inv_z2
-    vz2 = v2 * inv_z2
-
-    # Bounding box
-    min_x = max(0, int(min(x0, x1, x2)))
-    max_x = min(zbuffer.width, int(max(x0, x1, x2)) + 1)
-    min_y = max(0, int(min(y0, y1, y2)))
-    max_y = min(zbuffer.height, int(max(y0, y1, y2)) + 1)
-
-    # Оптимизация: выносим константы для барицентрических координат
-    denom = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2)
-    if abs(denom) < 1e-10:
+    points = np.asarray(vertices_2d, dtype=float)
+    verts = np.asarray(vertices_3d, dtype=float)
+    uv = np.asarray(tex_coords, dtype=float)
+    if not np.all(np.isfinite(points)):
         return
-    inv_denom = 1.0 / denom
 
-    for y in range(min_y, max_y):
-        # Центр пикселя
-        py = y + 0.5
-        for x in range(min_x, max_x):
-            px = x + 0.5
-            
-            # Вычисляем веса
-            w0 = ((y1 - y2) * (px - x2) + (x2 - x1) * (py - y2)) * inv_denom
-            w1 = ((y2 - y0) * (px - x2) + (x0 - x2) * (py - y2)) * inv_denom
-            w2 = 1.0 - w0 - w1
+    x0 = max(0, int(np.floor(points[:, 0].min())))
+    x1 = min(zbuffer.width, int(np.ceil(points[:, 0].max())) + 1)
+    y0 = max(0, int(np.floor(points[:, 1].min())))
+    y1 = min(zbuffer.height, int(np.ceil(points[:, 1].max())) + 1)
+    if x0 >= x1 or y0 >= y1:
+        return
 
-            if w0 >= 0 and w1 >= 0 and w2 >= 0:
-                # 1. Перспективно-корректная интерполяция глубины (Z-буфер)
-                # Z в экранном пространстве интерполируется как 1/z
-                current_inv_z = w0 * inv_z0 + w1 * inv_z1 + w2 * inv_z2
-                
-                if current_inv_z == 0: continue
-                z_current = 1.0 / current_inv_z # Реальная глубина пикселя
+    (ax, ay), (bx, by), (cx, cy) = points
+    den = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy)
+    if abs(den) < 1e-10:
+        return
 
-                # Проверка Z-буфера
-                # Мы используем положительную глубину, поэтому стандартная проверка (меньше = ближе) работает
-                if z_current < zbuffer.buffer[y, x]:
-                    
-                    # 2. Перспективная интерполяция текстурных координат
-                    # U = (u/z)_interp / (1/z)_interp
-                    u_interp = (w0 * uz0 + w1 * uz1 + w2 * uz2) * z_current
-                    v_interp = (w0 * vz0 + w1 * vz1 + w2 * vz2) * z_current
-                    
-                    # Получаем цвет текстуры
-                    color = get_texture_color(texture, u_interp, v_interp)
+    # Координаты центров всех пикселей прямоугольной области
+    yy, xx = np.mgrid[y0:y1, x0:x1]
+    px = xx + 0.5
+    py = yy + 0.5
 
-                    # 3. Освещение (по желанию, как в оригинале)
-                    if light is not None and material is not None and vertex_normals is not None:
-                        # Нормаль можно интерполировать линейно (приближение)
-                        # Для идеальной точности тоже нужна коррекция, но для нормалей это менее критично
-                        normal = interpolate_normal(vertex_normals, [w0, w1, w2])
-                        
-                        # Позиция для света
-                        # Линейная интерполяция координат тоже допустима для расчёта света
-                        pos_x = w0 * vertices_3d[0][0] + w1 * vertices_3d[1][0] + w2 * vertices_3d[2][0]
-                        pos_y = w0 * vertices_3d[0][1] + w1 * vertices_3d[1][1] + w2 * vertices_3d[2][1]
-                        pos_z = w0 * vertices_3d[0][2] + w1 * vertices_3d[1][2] + w2 * vertices_3d[2][2]
-                        pos_3d = np.array([pos_x, pos_y, pos_z])
-                        
-                        light_dir = normalize(light.position - pos_3d)
-                        
-                        # Создаем временный материал, где diffuse цвет берется из текстуры
-                        tex_material = Material(
-                            color=color, # Цвет текстуры вместо цвета материала
-                            ambient=material.ambient,
-                            diffuse=material.diffuse,
-                            specular=material.specular,
-                            shininess=material.shininess
-                        )
-                        
-                        if view_dir is not None:
-                            # Фонг (с использованием текстуры как диффузного цвета)
-                            final_color = phong_shading(normal, view_dir, light_dir, tex_material, light)
-                        else:
-                            final_color = lambert_shading(normal, light_dir, tex_material, light)
-                    else:
-                        final_color = color
+    # Барицентрические веса сразу для всех пикселей
+    w0 = ((by - cy) * (px - cx) + (cx - bx) * (py - cy)) / den
+    w1 = ((cy - ay) * (px - cx) + (ax - cx) * (py - cy)) / den
+    w2 = 1.0 - w0 - w1
 
-                    # Запись в буфер
-                    zbuffer.buffer[y, x] = z_current
-                    zbuffer.color_buffer[y, x] = np.clip(final_color, 0.0, 1.0)
+    # Перспективно-корректная интерполяция глубины
+    z_region = zbuffer.buffer[y0:y1, x0:x1]
+
+    valid = (
+        (w0 >= -1e-7) &
+        (w1 >= -1e-7) &
+        (w2 >= -1e-7)
+    )
+
+    if perspective:
+        # Перспективная проекция: интерполяция обратной глубины
+        depth_vertices = np.maximum(np.abs(verts[:, 2]), 1e-5)
+        inv_depth = 1.0 / depth_vertices
+
+        inv_z = (
+            w0 * inv_depth[0] +
+            w1 * inv_depth[1] +
+            w2 * inv_depth[2]
+        )
+
+        valid &= inv_z > 0
+
+        z = np.full_like(inv_z, np.inf)
+        z[valid] = 1.0 / inv_z[valid]
+
+    else:
+        # Аксонометрия: глубина интерполируется линейно
+        z = (
+            w0 * verts[0, 2] +
+            w1 * verts[1, 2] +
+            w2 * verts[2, 2]
+        )
+
+    visible = valid & np.isfinite(z) & (z < z_region)
+
+    if not np.any(visible):
+        return
+
+    # Дальше обрабатываем только видимые пиксели
+    a, b, c = w0[visible], w1[visible], w2[visible]
+    zv = z[visible]
+
+    # Перспективно-корректная интерполяция UV
+    if perspective:
+    # Перспективно-корректная интерполяция
+        u = (
+            a * uv[0, 0] * inv_depth[0] +
+            b * uv[1, 0] * inv_depth[1] +
+            c * uv[2, 0] * inv_depth[2]
+        ) * zv
+
+        v = (
+            a * uv[0, 1] * inv_depth[0] +
+            b * uv[1, 1] * inv_depth[1] +
+            c * uv[2, 1] * inv_depth[2]
+        ) * zv
+
+    else:
+        # Линейная интерполяция для аксонометрии
+        u = a * uv[0, 0] + b * uv[1, 0] + c * uv[2, 0]
+        v = a * uv[0, 1] + b * uv[1, 1] + c * uv[2, 1]
+
+    # Получение цветов из текстуры сразу для всех пикселей
+    if texture is None:
+        colors = np.ones((len(u), 3), dtype=float)
+    else:
+        th, tw = texture.shape[:2]
+        tx = (np.clip(u, 0.0, 1.0) * (tw - 1)).astype(int)
+        ty = (np.clip(v, 0.0, 1.0) * (th - 1)).astype(int)
+        colors = np.asarray(texture[ty, tx, :3], dtype=float) / 255.0
+
+    # Освещение текстуры
+    if light is not None and material is not None and vertex_normals is not None:
+        normals = np.asarray(vertex_normals, dtype=float)
+
+        # Интерполяция нормалей и нормализация
+        n = a[:, None] * normals[0] + b[:, None] * normals[1] + c[:, None] * normals[2]
+        n_len = np.linalg.norm(n, axis=1, keepdims=True)
+        n = np.divide(n, n_len, out=np.zeros_like(n), where=n_len > 0)
+
+        # Интерполяция положения точки
+        pos = a[:, None] * verts[0] + b[:, None] * verts[1] + c[:, None] * verts[2]
+
+        # Направление к источнику света
+        ld = np.asarray(light.position, dtype=float) - pos
+        ld_len = np.linalg.norm(ld, axis=1, keepdims=True)
+        ld = np.divide(ld, ld_len, out=np.zeros_like(ld), where=ld_len > 0)
+
+        cos_theta = np.maximum(0.0, np.sum(n * ld, axis=1))
+        diffuse = material.diffuse * cos_theta[:, None]
+        light_color = np.asarray(light.color, dtype=float)
+
+        # Фоновое и диффузное освещение
+        result = (material.ambient * colors +
+                  diffuse * colors * light_color * light.intensity)
+
+        # Зеркальное освещение, если задано направление взгляда
+        if view_dir is not None:
+            reflection = 2.0 * cos_theta[:, None] * n - ld
+            view = np.asarray(view_dir, dtype=float)
+            cos_alpha = np.maximum(0.0, reflection @ view)
+            specular = material.specular * (cos_alpha ** material.shininess)
+            result += specular[:, None] * light_color * light.intensity
+
+        colors = result
+
+    # Запись глубины и цветов только для видимых пикселей
+    z_region[visible] = zv
+    color_region = zbuffer.color_buffer[y0:y1, x0:x1]
+    color_region[visible] = np.clip(colors, 0.0, 1.0)
 
 
 # --------------------
@@ -1377,10 +1447,64 @@ POLY_BUILDERS = {
     'Гексаэдр (куб)': hexahedron,
     'Октаэдр': octahedron,
     'Икосаэдр': icosahedron,
-    'Додекаэдр': dodecahedron,
 }
 
 
+# ЛАБ 9.2 — UV-координаты для текстурирования
+def ensure_texture_coordinates(poly):
+    """Задаёт UV-координаты граням, у которых их ещё нет."""
+
+    for face in poly.faces:
+        n = len(face.indices)
+
+        if n < 3:
+            continue
+
+        # Если OBJ уже содержит корректные UV, сохраняем их
+        if (
+            len(face.tex_coords) == n
+            and all(
+                0 <= idx < len(poly.tex_coords)
+                for idx in face.tex_coords
+            )
+        ):
+            continue
+
+        if n == 3:
+            # Треугольная грань
+            uv = [
+                (0.0, 0.0),
+                (1.0, 0.0),
+                (0.5, 0.866)
+            ]
+
+        elif n == 4:
+            # Четырёхугольная грань
+            uv = [
+                (0.0, 0.0),
+                (1.0, 0.0),
+                (1.0, 1.0),
+                (0.0, 1.0)
+            ]
+
+        else:
+            # Резервная раскладка для многоугольников
+            angles = np.linspace(0, 2 * np.pi, n, endpoint=False)
+            uv = [
+                (0.5 + 0.5 * np.cos(a),
+                 0.5 + 0.5 * np.sin(a))
+                for a in angles
+            ]
+
+        face.tex_coords = []
+
+        for coord in uv:
+            index = len(poly.tex_coords)
+            poly.tex_coords.append(coord)
+            face.tex_coords.append(index)
+
+
+# ЛАБ 6 — Выбор многогранника
 def make_poly(name: str) -> Polyhedron:
     """Создаёт выбранный многогранник без дополнительных поворотов/масштабов."""
     builder = POLY_BUILDERS.get(name)
@@ -1389,77 +1513,52 @@ def make_poly(name: str) -> Polyhedron:
     return builder()
 
 
-def project_points(P: Polyhedron, proj_mode: str, f: float = 1.8, view_vector=None, cull_backfaces=False, camera=None):
-    """Возвращает 2D проекцию вершин и 3D координаты после преобразований."""
+# ЛАБ 6 и 8 — Проекция и подготовка граней
+def project_points(P: Polyhedron, proj_mode: str, f=1.8, view_vector=None,
+                   cull_backfaces=False, camera=None):
+    """Проекция на экран. Перспективная/Камера используют одно положение камеры.
+
+    Сначала мировые координаты переводятся в координаты камеры, затем
+    в нормализованные экранные координаты. Для изометрии — ортографический вид.
+    """
     Q = P.copy()
-
-    # Применяем трансформации
-    if proj_mode == 'camera' and camera is not None:
-        view_matrix = camera.get_view_matrix()
-        Q = Q.apply(view_matrix)
-    elif proj_mode == 'perspective':
-        Q = Q.translate(0, 0, 5.0)
+    if proj_mode == 'isometric':
+        Q.apply(Rx(35.264389682754654) @ Rz(45.0))
+        pts = Q.V[:3] / Q.V[3]
+        diameter = max(float(np.linalg.norm(np.ptp(pts, axis=1))), 0.01)
+        half_height = diameter * 0.72
+        aspect = camera.aspect if camera is not None else 1.0
+        x = pts[0] / (half_height * aspect)
+        y = pts[1] / half_height
+        # Ортографический вид: направление взгляда от объекта вдоль +Z.
+        eye = np.array([0.0, 0.0, 1.0])
+        valid = np.ones(Q.V.shape[1], dtype=bool)
     else:
-        alpha = 35.264389682754654
-        beta = 45.0
-        Q = Q.apply(Rx(alpha) @ Rz(beta))
-
-    # Получаем 3D координаты после преобразований (до проекции)
-    vertices_3d = Q.V[:3, :] / Q.V[3, :]
-    
-    # Пересчитываем нормали граней после преобразований для корректного отсечения
-    # (хотя они уже преобразованы в apply(), пересчет гарантирует корректность)
-    Q.compute_face_normals()
-    Q.compute_vertex_normals()
-
-    # Теперь применяем проекцию
-    if proj_mode == 'camera' and camera is not None:
-        M = camera.get_projection_matrix()
-    elif proj_mode == 'perspective':
-        M = perspective(f)
-    else:
-        M = ortho_xy()
-
-    x, y = Q.projected(M)
-
-    # Удаление нелицевых граней (backface culling)
-    # Вычисляем направление взгляда в зависимости от режима проекции
-    # Важно: нормали граней уже преобразованы в методе apply(), поэтому
-    # направление взгляда должно быть в той же системе координат
-    if proj_mode == 'camera' and camera is not None:
-        # В системе координат камеры после применения view_matrix
-        # камера находится в начале координат и смотрит вдоль -Z
-        # Видимые грани имеют нормали, направленные к камере (в сторону +Z)
-        view_dir = np.array([0.0, 0.0, 1.0])
-    elif proj_mode == 'perspective':
-        # Для перспективной проекции объект перемещен на (0, 0, 5.0)
-        # Камера в начале координат смотрит вдоль +Z
-        # Направление от камеры к объекту = [0, 0, 1]
-        view_dir = np.array([0.0, 0.0, 1.0])
-    else:
-        # Для изометрической проекции применены повороты Rx(alpha) @ Rz(beta)
-        # Направление взгляда = результат применения этих поворотов к [0, 0, 1]
-        # (исходная ось Z после преобразований)
-        alpha = 35.264389682754654
-        beta = 45.0
-        # Применяем прямые повороты к вектору [0, 0, 1]
-        R = Rx(alpha) @ Rz(beta)
-        view_dir = normalize(R[:3, :3] @ np.array([0.0, 0.0, 1.0]))
-    
-    # Фильтруем грани: оставляем только те, нормали которых направлены к камере
-    visible_faces = []
+        if camera is None:
+            raise ValueError('Для перспективы требуется камера')
+        Q.apply(camera.get_view_matrix())
+        pts = Q.V[:3] / Q.V[3]
+        clip = camera.get_projection_matrix() @ Q.V
+        w = clip[3]
+        valid = np.isfinite(w) & (w > camera.near)
+        x = np.divide(clip[0], w, out=np.full_like(w, np.nan), where=valid)
+        y = np.divide(clip[1], w, out=np.full_like(w, np.nan), where=valid)
+    visible = []
     for face in Q.faces:
-        if face.normal is None:
+        if len(face.indices) < 3 or not np.all(valid[face.indices]):
             continue
-        # Вычисляем скалярное произведение нормали грани и направления взгляда
-        # Если > 0, грань видима (нормаль направлена к камере)
-        dot_product = np.dot(face.normal, view_dir)
-        if dot_product > 0:
-            visible_faces.append(face)
-    
-    edges = Q.edges()
-
-    return (x, y, edges, visible_faces, Q, vertices_3d)
+        normal = face.normal
+        if normal is None:
+            continue
+    # ЛАБ 8.1 — Отсечение нелицевых граней
+        if proj_mode == 'isometric':
+            front = np.dot(normal, eye) > 0
+        else:
+            face_center = np.mean(pts[:, face.indices], axis=1)
+            front = np.dot(normal, -face_center) > 0
+        if front:
+            visible.append(face)
+    return x, y, Q.edges(), visible, Q, pts
 
 
 def to_pixels(x, y, width, height, scale=120.0):
@@ -1495,6 +1594,7 @@ class App:
 
         # Камера
         self.camera = Camera(position=[0, 2, 5], target=[0, 0, 0], up=[0, 1, 0])
+        self.drag = None
 
         # Освещение
         self.light = Light(position=[2, 2, 5], color=(1.0, 1.0, 1.0), intensity=1.0)
@@ -1510,305 +1610,242 @@ class App:
 
         # Создаем интерфейс
         self.create_ui()
+        self.fit_camera()
+        self.redraw()
 
     def create_ui(self):
-        """Создает пользовательский интерфейс."""
-        top = ttk.Frame(self.root)
-        top.pack(side=tk.TOP, fill=tk.X, padx=8, pady=8)
+        """Боковая прокручиваемая панель в стиле лабораторной № 8."""
+        self.root.title('Лабораторная № 9 — Освещение и текстурирование')
+        self.root.geometry('1260x780')
+        self.root.minsize(850, 540)
 
-        ttk.Label(top, text='Многогранник:').pack(side=tk.LEFT)
-        self.poly_box = ttk.Combobox(
-            top,
-            textvariable=self.poly_var,
-            values=list(POLY_BUILDERS.keys()),
-            state='readonly',
-            width=18,
-        )
-        self.poly_box.pack(side=tk.LEFT, padx=(6, 12))
-        self.poly_box.bind('<<ComboboxSelected>>', lambda e: self.rebuild_model())
+        shell = ttk.Frame(self.root)
+        shell.pack(fill='both', expand=True)
 
-        ttk.Label(top, text='Проекция:').pack(side=tk.LEFT)
-        self.rb_persp = ttk.Radiobutton(
-            top, text='Перспективная', value='perspective', variable=self.proj_var,
-            command=self.redraw
-        )
-        self.rb_iso = ttk.Radiobutton(
-            top, text='Аксонометрическая', value='isometric', variable=self.proj_var,
-            command=self.redraw
-        )
-        self.rb_camera = ttk.Radiobutton(
-            top, text='Камера', value='camera', variable=self.proj_var,
-            command=self.redraw
-        )
-        self.rb_persp.pack(side=tk.LEFT, padx=(6, 6))
-        self.rb_iso.pack(side=tk.LEFT, padx=(6, 6))
-        self.rb_camera.pack(side=tk.LEFT)
+        # Левая панель с вертикальной прокруткой — как в лабораторной № 8.
+        sidebar = ttk.Frame(shell, width=285)
+        sidebar.pack(side='left', fill='y')
+        sidebar.pack_propagate(False)
+        scroll_canvas = tk.Canvas(sidebar, width=269, highlightthickness=0, bg='#f4f6fa')
+        scrollbar = ttk.Scrollbar(sidebar, orient='vertical', command=scroll_canvas.yview)
+        scrollbar.pack(side='right', fill='y')
+        scroll_canvas.pack(side='left', fill='both', expand=True)
+        scroll_canvas.configure(yscrollcommand=scrollbar.set)
+        panel = ttk.Frame(scroll_canvas, padding=9)
+        window_id = scroll_canvas.create_window((0, 0), window=panel, anchor='nw')
+        panel.bind('<Configure>', lambda e: scroll_canvas.configure(scrollregion=scroll_canvas.bbox('all')))
+        scroll_canvas.bind('<Configure>', lambda e: scroll_canvas.itemconfig(window_id, width=e.width))
+        scroll_canvas.bind('<MouseWheel>', lambda e: scroll_canvas.yview_scroll(-int(e.delta / 120), 'units'))
+        scroll_canvas.bind('<Button-4>', lambda e: scroll_canvas.yview_scroll(-1, 'units'))
+        scroll_canvas.bind('<Button-5>', lambda e: scroll_canvas.yview_scroll(1, 'units'))
 
-        ttk.Label(top, text='Режим:').pack(side=tk.LEFT, padx=(12, 2))
-        self.render_combo = ttk.Combobox(
-            top,
-            textvariable=self.render_mode,
-            values=['wireframe', 'gouraud', 'phong', 'texture'],
-            state='readonly',
-            width=12,
-        )
-        self.render_combo.pack(side=tk.LEFT, padx=(2, 12))
-        self.render_combo.bind('<<ComboboxSelected>>', lambda e: self.redraw())
-
-        ttk.Button(top, text='Сброс', command=self.rebuild_model).pack(side=tk.RIGHT)
-        ttk.Button(top, text='Сохранить OBJ', command=self.save_obj).pack(side=tk.RIGHT, padx=(0, 6))
-        ttk.Button(top, text='Загрузить OBJ', command=self.load_obj).pack(side=tk.RIGHT, padx=(0, 6))
-
-        # Панель настроек освещения
-        light_frame = ttk.LabelFrame(self.root, text='Освещение')
-        light_frame.pack(side=tk.TOP, fill=tk.X, padx=8, pady=(0, 8))
-
-        light_row1 = ttk.Frame(light_frame)
-        light_row1.pack(side=tk.TOP, fill=tk.X, pady=4)
-
-        ttk.Label(light_row1, text='Позиция света (x,y,z):').pack(side=tk.LEFT, padx=(6, 4))
-        self.light_x_entry = ttk.Entry(light_row1, width=6)
-        self.light_x_entry.insert(0, '2')
-        self.light_x_entry.pack(side=tk.LEFT, padx=2)
-
-        self.light_y_entry = ttk.Entry(light_row1, width=6)
-        self.light_y_entry.insert(0, '2')
-        self.light_y_entry.pack(side=tk.LEFT, padx=2)
-
-        self.light_z_entry = ttk.Entry(light_row1, width=6)
-        self.light_z_entry.insert(0, '5')
-        self.light_z_entry.pack(side=tk.LEFT, padx=2)
-
-        ttk.Button(light_row1, text='Применить', command=self.apply_light_position).pack(side=tk.LEFT, padx=6)
-
-        light_row2 = ttk.Frame(light_frame)
-        light_row2.pack(side=tk.TOP, fill=tk.X, pady=4)
-
-        ttk.Label(light_row2, text='Цвет объекта (R,G,B):').pack(side=tk.LEFT, padx=(6, 4))
-        self.mat_r_entry = ttk.Entry(light_row2, width=6)
-        self.mat_r_entry.insert(0, '0.8')
-        self.mat_r_entry.pack(side=tk.LEFT, padx=2)
-
-        self.mat_g_entry = ttk.Entry(light_row2, width=6)
-        self.mat_g_entry.insert(0, '0.8')
-        self.mat_g_entry.pack(side=tk.LEFT, padx=2)
-
-        self.mat_b_entry = ttk.Entry(light_row2, width=6)
-        self.mat_b_entry.insert(0, '0.8')
-        self.mat_b_entry.pack(side=tk.LEFT, padx=2)
-
-        ttk.Button(light_row2, text='Применить', command=self.apply_material_color).pack(side=tk.LEFT, padx=6)
-
-        # Панель настроек текстуры
-        texture_frame = ttk.LabelFrame(self.root, text='Текстура')
-        texture_frame.pack(side=tk.TOP, fill=tk.X, padx=8, pady=(0, 8))
-
-        texture_row = ttk.Frame(texture_frame)
-        texture_row.pack(side=tk.TOP, fill=tk.X, pady=4)
-
-        ttk.Label(texture_row, text='Текстура:').pack(side=tk.LEFT, padx=(6, 4))
-        self.texture_combo = ttk.Combobox(
-            texture_row,
-            textvariable=tk.StringVar(value='checkerboard'),
-            values=['checkerboard', 'gradient', 'loaded'],
-            state='readonly',
-            width=12,
-        )
-        self.texture_combo.pack(side=tk.LEFT, padx=(2, 12))
-        self.texture_combo.bind('<<ComboboxSelected>>', lambda e: self.change_texture())
-
-        ttk.Button(texture_row, text='Загрузить текстуру', command=self.load_texture).pack(side=tk.LEFT, padx=6)
-
-        # Панель управления камерой
-        camera_frame = ttk.LabelFrame(self.root, text='Управление камерой')
-        camera_frame.pack(side=tk.TOP, fill=tk.X, padx=8, pady=(0, 8))
-
-        camera_row1 = ttk.Frame(camera_frame)
-        camera_row1.pack(side=tk.TOP, fill=tk.X, pady=4)
-
-        ttk.Label(camera_row1, text='Орбитальное вращение:').pack(side=tk.LEFT, padx=(6, 4))
-        ttk.Label(camera_row1, text='Азимут (°)').pack(side=tk.LEFT, padx=(8, 2))
-        self.cam_azimuth_entry = ttk.Entry(camera_row1, width=6)
-        self.cam_azimuth_entry.insert(0, '10')
-        self.cam_azimuth_entry.pack(side=tk.LEFT, padx=2)
-
-        ttk.Label(camera_row1, text='Высота (°)').pack(side=tk.LEFT, padx=(8, 2))
-        self.cam_elevation_entry = ttk.Entry(camera_row1, width=6)
-        self.cam_elevation_entry.insert(0, '10')
-        self.cam_elevation_entry.pack(side=tk.LEFT, padx=2)
-
-        ttk.Button(camera_row1, text='◄ Влево', command=lambda: self.camera_orbit(-1, 0)).pack(side=tk.LEFT, padx=2)
-        ttk.Button(camera_row1, text='Вправо ►', command=lambda: self.camera_orbit(1, 0)).pack(side=tk.LEFT, padx=2)
-        ttk.Button(camera_row1, text='▲ Вверх', command=lambda: self.camera_orbit(0, 1)).pack(side=tk.LEFT, padx=2)
-        ttk.Button(camera_row1, text='Вниз ▼', command=lambda: self.camera_orbit(0, -1)).pack(side=tk.LEFT, padx=2)
-
-        camera_row2 = ttk.Frame(camera_frame)
-        camera_row2.pack(side=tk.TOP, fill=tk.X, pady=4)
-
-        ttk.Label(camera_row2, text='Приближение:').pack(side=tk.LEFT, padx=(6, 4))
-        ttk.Label(camera_row2, text='Шаг').pack(side=tk.LEFT, padx=(8, 2))
-        self.cam_zoom_entry = ttk.Entry(camera_row2, width=6)
-        self.cam_zoom_entry.insert(0, '0.5')
-        self.cam_zoom_entry.pack(side=tk.LEFT, padx=2)
-
-        ttk.Button(camera_row2, text='+ Приблизить', command=lambda: self.camera_zoom(1)).pack(side=tk.LEFT, padx=2)
-        ttk.Button(camera_row2, text='− Отдалить', command=lambda: self.camera_zoom(-1)).pack(side=tk.LEFT, padx=2)
-
-        camera_row3 = ttk.Frame(camera_frame)
-        camera_row3.pack(side=tk.TOP, fill=tk.X, pady=4)
-
-        ttk.Label(camera_row3, text='Позиция камеры (x,y,z):').pack(side=tk.LEFT, padx=(6, 4))
-        self.cam_pos_x_entry = ttk.Entry(camera_row3, width=6)
-        self.cam_pos_x_entry.insert(0, '0')
-        self.cam_pos_x_entry.pack(side=tk.LEFT, padx=2)
-
-        self.cam_pos_y_entry = ttk.Entry(camera_row3, width=6)
-        self.cam_pos_y_entry.insert(0, '2')
-        self.cam_pos_y_entry.pack(side=tk.LEFT, padx=2)
-
-        self.cam_pos_z_entry = ttk.Entry(camera_row3, width=6)
-        self.cam_pos_z_entry.insert(0, '5')
-        self.cam_pos_z_entry.pack(side=tk.LEFT, padx=2)
-
-        ttk.Label(camera_row3, text='Цель (x,y,z):').pack(side=tk.LEFT, padx=(12, 2))
-        self.cam_target_x_entry = ttk.Entry(camera_row3, width=6)
-        self.cam_target_x_entry.insert(0, '0')
-        self.cam_target_x_entry.pack(side=tk.LEFT, padx=2)
-
-        self.cam_target_y_entry = ttk.Entry(camera_row3, width=6)
-        self.cam_target_y_entry.insert(0, '0')
-        self.cam_target_y_entry.pack(side=tk.LEFT, padx=2)
-
-        self.cam_target_z_entry = ttk.Entry(camera_row3, width=6)
-        self.cam_target_z_entry.insert(0, '0')
-        self.cam_target_z_entry.pack(side=tk.LEFT, padx=2)
-
-        ttk.Button(camera_row3, text='Установить', command=self.camera_set_position).pack(side=tk.LEFT, padx=6)
-        ttk.Button(camera_row3, text='Сброс', command=self.camera_reset).pack(side=tk.LEFT, padx=2)
-
-        camera_row4 = ttk.Frame(camera_frame)
-        camera_row4.pack(side=tk.TOP, fill=tk.X, pady=4)
-
-        ttk.Label(camera_row4, text='Автоматическое вращение:').pack(side=tk.LEFT, padx=(6, 4))
-        self.auto_rotate = tk.BooleanVar(value=False)
-        ttk.Checkbutton(camera_row4, text='Включить', variable=self.auto_rotate,
-                        command=self.toggle_auto_rotate).pack(
-            side=tk.LEFT, padx=2)
-
-        ttk.Label(camera_row4, text='Скорость (°/кадр):').pack(side=tk.LEFT, padx=(12, 2))
-        self.auto_rotate_speed_entry = ttk.Entry(camera_row4, width=6)
-        self.auto_rotate_speed_entry.insert(0, '2')
-        self.auto_rotate_speed_entry.pack(side=tk.LEFT, padx=2)
-
-        self.animation_id = None
-
-        # Панель преобразований
-        controls = ttk.LabelFrame(self.root, text='Преобразования')
-        controls.pack(side=tk.TOP, fill=tk.X, padx=8, pady=(0, 8))
-
-        # Смещение
-        trf1 = ttk.Frame(controls)
-        trf1.pack(side=tk.TOP, fill=tk.X, pady=4)
-        ttk.Label(trf1, text='Смещение: dx').pack(side=tk.LEFT)
-        self.dx_entry = ttk.Entry(trf1, width=6)
-        self.dx_entry.insert(0, '0')
-        self.dx_entry.pack(side=tk.LEFT, padx=(4, 8))
-        ttk.Label(trf1, text='dy').pack(side=tk.LEFT)
-        self.dy_entry = ttk.Entry(trf1, width=6)
-        self.dy_entry.insert(0, '0')
-        self.dy_entry.pack(side=tk.LEFT, padx=(4, 8))
-        ttk.Label(trf1, text='dz').pack(side=tk.LEFT)
-        self.dz_entry = ttk.Entry(trf1, width=6)
-        self.dz_entry.insert(0, '0')
-        self.dz_entry.pack(side=tk.LEFT, padx=(4, 8))
-        ttk.Button(trf1, text='Применить', command=self.apply_translate).pack(side=tk.LEFT, padx=6)
-
-        # Поворот
-        trf2 = ttk.Frame(controls)
-        trf2.pack(side=tk.TOP, fill=tk.X, pady=4)
-        ttk.Label(trf2, text='Поворот: ось').pack(side=tk.LEFT)
-        self.rot_axis_var = tk.StringVar(value='x')
-        self.rot_axis = ttk.Combobox(trf2, textvariable=self.rot_axis_var, values=['x', 'y', 'z'], state='readonly',
-                                     width=4)
-        self.rot_axis.pack(side=tk.LEFT, padx=(4, 8))
-        ttk.Label(trf2, text='угол (°)').pack(side=tk.LEFT)
-        self.angle_entry = ttk.Entry(trf2, width=8)
-        self.angle_entry.insert(0, '30')
-        self.angle_entry.pack(side=tk.LEFT, padx=(4, 8))
-        ttk.Button(trf2, text='Повернуть', command=self.apply_rotate).pack(side=tk.LEFT, padx=6)
-        ttk.Button(trf2, text='Повернуть (через центр)', command=self.apply_rotate_center).pack(side=tk.LEFT,
-                                                                                                padx=6)
-
-        # Масштаб
-        trf3 = ttk.Frame(controls)
-        trf3.pack(side=tk.TOP, fill=tk.X, pady=4)
-        ttk.Label(trf3, text='Масштаб: sx').pack(side=tk.LEFT)
-        self.sx_entry = ttk.Entry(trf3, width=6)
-        self.sx_entry.insert(0, '1')
-        self.sx_entry.pack(side=tk.LEFT, padx=(4, 8))
-        ttk.Label(trf3, text='sy').pack(side=tk.LEFT)
-        self.sy_entry = ttk.Entry(trf3, width=6)
-        self.sy_entry.insert(0, '1')
-        self.sy_entry.pack(side=tk.LEFT, padx=(4, 8))
-        ttk.Label(trf3, text='sz').pack(side=tk.LEFT)
-        self.sz_entry = ttk.Entry(trf3, width=6)
-        self.sz_entry.insert(0, '1')
-        self.sz_entry.pack(side=tk.LEFT, padx=(4, 8))
-        ttk.Button(trf3, text='Масштаб', command=self.apply_scale).pack(side=tk.LEFT, padx=6)
-
-        # Равномерный масштаб вокруг центра (одно число)
-        ttk.Label(trf3, text=' s').pack(side=tk.LEFT, padx=(12, 2))
-        self.s_uniform_entry = ttk.Entry(trf3, width=6)
-        self.s_uniform_entry.insert(0, '1')
-        self.s_uniform_entry.pack(side=tk.LEFT, padx=(2, 6))
-        ttk.Button(trf3, text='Масштаб (через центр)', command=self.apply_scale_center).pack(side=tk.LEFT, padx=6)
-
-        # Вращение вокруг произвольной прямой (p1 -> p2)
-        trf5 = ttk.Frame(controls)
-        trf5.pack(side=tk.TOP, fill=tk.X, pady=4)
-        ttk.Label(trf5, text='Поворот вокруг прямой:').pack(side=tk.LEFT)
-        ttk.Label(trf5, text='p1(x,y,z)').pack(side=tk.LEFT, padx=(8, 2))
-        self.p1x_entry = ttk.Entry(trf5, width=5);
-        self.p1x_entry.insert(0, '0');
-        self.p1x_entry.pack(side=tk.LEFT)
-        self.p1y_entry = ttk.Entry(trf5, width=5);
-        self.p1y_entry.insert(0, '0');
-        self.p1y_entry.pack(side=tk.LEFT)
-        self.p1z_entry = ttk.Entry(trf5, width=5);
-        self.p1z_entry.insert(0, '0');
-        self.p1z_entry.pack(side=tk.LEFT)
-        ttk.Label(trf5, text='p2(x,y,z)').pack(side=tk.LEFT, padx=(8, 2))
-        self.p2x_entry = ttk.Entry(trf5, width=5);
-        self.p2x_entry.insert(0, '0');
-        self.p2x_entry.pack(side=tk.LEFT)
-        self.p2y_entry = ttk.Entry(trf5, width=5);
-        self.p2y_entry.insert(0, '1');
-        self.p2y_entry.pack(side=tk.LEFT)
-        self.p2z_entry = ttk.Entry(trf5, width=5);
-        self.p2z_entry.insert(0, '0');
-        self.p2z_entry.pack(side=tk.LEFT)
-        ttk.Label(trf5, text='угол (°)').pack(side=tk.LEFT, padx=(8, 2))
-        self.angle_line_entry = ttk.Entry(trf5, width=7);
-        self.angle_line_entry.insert(0, '30');
-        self.angle_line_entry.pack(side=tk.LEFT)
-        ttk.Button(trf5, text='Повернуть (линия)', command=self.apply_rotate_line).pack(side=tk.LEFT, padx=6)
-
-        # Отражение
-        trf4 = ttk.Frame(controls)
-        trf4.pack(side=tk.TOP, fill=tk.X, pady=4)
-        ttk.Label(trf4, text='Отражение: плоскость').pack(side=tk.LEFT)
-        self.refl_plane_var = tk.StringVar(value='xy')
-        self.refl_plane = ttk.Combobox(trf4, textvariable=self.refl_plane_var, values=['xy', 'yz', 'xz'],
-                                       state='readonly', width=6)
-        self.refl_plane.pack(side=tk.LEFT, padx=(6, 10))
-        ttk.Button(trf4, text='Отразить', command=self.apply_reflect).pack(side=tk.LEFT, padx=6)
-
-        self.canvas = tk.Canvas(self.root, bg='white', width=800, height=600)
-        self.canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        # Большая область визуализации справа.
+        self.canvas = tk.Canvas(shell, bg='#f7f9fc', highlightthickness=0)
+        self.canvas.pack(side='right', fill='both', expand=True)
         self.canvas.bind('<Configure>', lambda e: self.redraw())
+        self.canvas.bind('<ButtonPress-1>', self.start_drag)
+        self.canvas.bind('<B1-Motion>', self.drag_camera)
+        self.canvas.bind('<MouseWheel>', lambda e: self.camera_zoom(1 if e.delta > 0 else -1))
+        self.canvas.bind('<Button-4>', lambda e: self.camera_zoom(1))
+        self.canvas.bind('<Button-5>', lambda e: self.camera_zoom(-1))
+
+        def section(title):
+            frame = ttk.LabelFrame(panel, text=title, padding=7)
+            frame.pack(fill='x', pady=4)
+            return frame
+
+        def entry(parent, value, width=7):
+            widget = ttk.Entry(parent, width=width)
+            widget.insert(0, str(value))
+            widget.pack(side='left', padx=2)
+            return widget
+
+        def row(parent):
+            frame = ttk.Frame(parent)
+            frame.pack(fill='x', pady=2)
+            return frame
+
+        def triple(parent, label, defaults):
+            ttk.Label(parent, text=label).pack(anchor='w', pady=(3, 1))
+            r = row(parent)
+            return [entry(r, v) for v in defaults]
+
+        # ЛАБ 6 и 7.1 — Выбор модели и OBJ
+        # Модель и загрузка файлов.
+        f = section('Модель / сцена')
+        ttk.Label(f, text='Многогранник').pack(anchor='w')
+        self.poly_box = ttk.Combobox(
+            f, textvariable=self.poly_var, values=list(POLY_BUILDERS.keys()),
+            state='readonly', width=27
+        )
+        self.poly_box.pack(fill='x', pady=3)
+        self.poly_box.bind('<<ComboboxSelected>>', lambda e: self.rebuild_model())
+        r = row(f)
+        ttk.Button(r, text='Открыть OBJ', command=self.load_obj).pack(side='left', fill='x', expand=True)
+        ttk.Button(r, text='Сохранить', command=self.save_obj).pack(side='left', fill='x', expand=True, padx=(5, 0))
+        ttk.Button(f, text='Сбросить модель', command=self.rebuild_model).pack(fill='x', pady=2)
+
+        # ЛАБ 6, 8 и 9 — Проекции и режимы отображения
+        # Способы отображения и проекции.
+        f = section('Режим отображения')
+        for title, value in [
+            ('Каркас', 'wireframe'), ('Гуро (Ламберт)', 'gouraud'),
+            ('Фонг (туншейдинг)', 'phong'), ('Текстура', 'texture')
+        ]:
+            ttk.Radiobutton(f, text=title, variable=self.render_mode,
+                            value=value, command=self.redraw).pack(anchor='w', pady=1)
+        ttk.Label(f, text='Проекция:', font=('Arial', 9, 'bold')).pack(anchor='w', pady=(6, 1))
+        self.rb_persp = ttk.Radiobutton(f, text='Перспективная', value='perspective',
+                                       variable=self.proj_var, command=self.redraw)
+        self.rb_iso = ttk.Radiobutton(f, text='Аксонометрическая', value='isometric',
+                                     variable=self.proj_var, command=self.redraw)
+        self.rb_camera = ttk.Radiobutton(f, text='Камера', value='camera',
+                                        variable=self.proj_var, command=self.redraw)
+        for control in (self.rb_persp, self.rb_iso, self.rb_camera):
+            control.pack(anchor='w')
+        # Сохраняем переменную render_combo для совместимости со старым кодом.
+        # Выбор режима теперь осуществляется радиокнопками выше.
+        self.render_combo = None
+
+        # ЛАБ 9.1 — Управление освещением
+        # Освещение.
+        f = section('Освещение')
+        self.light_x_entry, self.light_y_entry, self.light_z_entry = triple(
+            f, 'Позиция источника света (X, Y, Z)', ('2', '2', '5')
+        )
+        ttk.Button(f, text='Применить положение света',
+                   command=self.apply_light_position).pack(fill='x', pady=2)
+        self.mat_r_entry, self.mat_g_entry, self.mat_b_entry = triple(
+            f, 'Цвет объекта (R, G, B)', ('0.8', '0.8', '0.8')
+        )
+        ttk.Button(f, text='Применить цвет',
+                   command=self.apply_material_color).pack(fill='x', pady=2)
+
+        # ЛАБ 9.2 — Управление текстурами
+        # Текстуры.
+        f = section('Текстурирование')
+        ttk.Label(f, text='Текстура').pack(anchor='w')
+        self.texture_combo = ttk.Combobox(
+            f, values=['checkerboard', 'gradient', 'loaded'], state='readonly', width=27
+        )
+        self.texture_combo.set(self.current_texture)
+        self.texture_combo.pack(fill='x', pady=3)
+        self.texture_combo.bind('<<ComboboxSelected>>', lambda e: self.change_texture())
+        ttk.Button(f, text='Загрузить текстуру', command=self.load_texture).pack(fill='x', pady=2)
+
+        # ЛАБ 8.3 — Управление камерой
+        # Камера — компактные кнопки в духе лабораторной № 8.
+        f = section('Камера')
+        ttk.Label(f, text='Шаг вращения (градусы)').pack(anchor='w')
+        r = row(f)
+        ttk.Label(r, text='Азимут').pack(side='left')
+        self.cam_azimuth_entry = entry(r, '10', 6)
+        ttk.Label(r, text='Высота').pack(side='left', padx=(6, 0))
+        self.cam_elevation_entry = entry(r, '10', 6)
+        r = row(f)
+        ttk.Button(r, text='◀ Влево', command=lambda: self.camera_orbit(-1, 0)).pack(
+            side='left', fill='x', expand=True
+        )
+        ttk.Button(r, text='Вправо ▶', command=lambda: self.camera_orbit(1, 0)).pack(
+            side='left', fill='x', expand=True
+        )
+        r = row(f)
+        ttk.Button(r, text='▲ Вверх', command=lambda: self.camera_orbit(0, 1)).pack(
+            side='left', fill='x', expand=True
+        )
+        ttk.Button(r, text='Вниз ▼', command=lambda: self.camera_orbit(0, -1)).pack(
+            side='left', fill='x', expand=True
+        )
+        r = row(f)
+        ttk.Label(r, text='Шаг приближения').pack(side='left')
+        self.cam_zoom_entry = entry(r, '0.5', 6)
+        r = row(f)
+        ttk.Button(r, text='+ Ближе', command=lambda: self.camera_zoom(1)).pack(
+            side='left', fill='x', expand=True
+        )
+        ttk.Button(r, text='− Дальше', command=lambda: self.camera_zoom(-1)).pack(
+            side='left', fill='x', expand=True
+        )
+        ttk.Label(f, text='Позиция камеры (X, Y, Z)').pack(anchor='w', pady=(5, 0))
+        r = row(f)
+        self.cam_pos_x_entry, self.cam_pos_y_entry, self.cam_pos_z_entry = [
+            entry(r, value) for value in ('0', '2', '5')
+        ]
+        ttk.Label(f, text='Цель камеры (X, Y, Z)').pack(anchor='w')
+        r = row(f)
+        self.cam_target_x_entry, self.cam_target_y_entry, self.cam_target_z_entry = [
+            entry(r, value) for value in ('0', '0', '0')
+        ]
+        r = row(f)
+        ttk.Button(r, text='Установить', command=self.camera_set_position).pack(
+            side='left', fill='x', expand=True
+        )
+        ttk.Button(r, text='Сброс камеры', command=self.camera_reset).pack(
+            side='left', fill='x', expand=True
+        )
+        # ЛАБ 8.3 — Автоматическое вращение камеры
+        # Возможность автовращения из исходной девятой лабораторной сохранена.
+        self.auto_rotate = tk.BooleanVar(value=False)
+        self.animation_id = None
+        r = row(f)
+        ttk.Checkbutton(r, text='Автовращение', variable=self.auto_rotate,
+                        command=self.toggle_auto_rotate).pack(side='left')
+        ttk.Label(r, text='°/кадр').pack(side='left', padx=(5, 1))
+        self.auto_rotate_speed_entry = entry(r, '2', 5)
+
+        # ЛАБ 6 — Управление преобразованиями
+        # Аффинные преобразования.
+        f = section('Преобразования объекта')
+        self.dx_entry, self.dy_entry, self.dz_entry = triple(
+            f, 'Перенос (dx, dy, dz)', ('0', '0', '0')
+        )
+        ttk.Button(f, text='Переместить', command=self.apply_translate).pack(fill='x', pady=2)
+
+        r = row(f)
+        ttk.Label(r, text='Ось').pack(side='left')
+        self.rot_axis_var = tk.StringVar(value='x')
+        self.rot_axis = ttk.Combobox(r, textvariable=self.rot_axis_var,
+                                     values=['x', 'y', 'z'], state='readonly', width=4)
+        self.rot_axis.pack(side='left', padx=4)
+        ttk.Label(r, text='Угол').pack(side='left')
+        self.angle_entry = entry(r, '30', 7)
+        ttk.Button(f, text='Повернуть объект', command=self.apply_rotate).pack(fill='x', pady=2)
+        ttk.Button(f, text='Повернуть вокруг центра', command=self.apply_rotate_center).pack(fill='x', pady=2)
+
+        self.sx_entry, self.sy_entry, self.sz_entry = triple(
+            f, 'Масштаб (sx, sy, sz)', ('1', '1', '1')
+        )
+        ttk.Button(f, text='Масштабировать', command=self.apply_scale).pack(fill='x', pady=2)
+        r = row(f)
+        ttk.Label(r, text='Масштаб относительно центра').pack(side='left')
+        self.s_uniform_entry = entry(r, '1', 6)
+        ttk.Button(f, text='Применить масштаб к центру',
+                   command=self.apply_scale_center).pack(fill='x', pady=2)
+
+        ttk.Label(f, text='Поворот вокруг прямой (две точки)').pack(anchor='w', pady=(5, 0))
+        self.p1x_entry, self.p1y_entry, self.p1z_entry = triple(
+            f, 'Точка P1 (x, y, z)', ('0', '0', '0')
+        )
+        self.p2x_entry, self.p2y_entry, self.p2z_entry = triple(
+            f, 'Точка P2 (x, y, z)', ('0', '1', '0')
+        )
+        r = row(f)
+        ttk.Label(r, text='Угол').pack(side='left')
+        self.angle_line_entry = entry(r, '30')
+        ttk.Button(f, text='Вращать вокруг прямой',
+                   command=self.apply_rotate_line).pack(fill='x', pady=2)
+
+        r = row(f)
+        ttk.Label(r, text='Отражение').pack(side='left')
+        self.refl_plane_var = tk.StringVar(value='xy')
+        self.refl_plane = ttk.Combobox(r, textvariable=self.refl_plane_var,
+                                       values=['xy', 'yz', 'xz'], state='readonly', width=6)
+        self.refl_plane.pack(side='left', padx=5)
+        ttk.Button(f, text='Отразить', command=self.apply_reflect).pack(fill='x', pady=2)
 
         self.redraw()
 
+    # ЛАБ 9.1 — Настройка света и цвета
     def apply_light_position(self):
         """Применяет новую позицию источника света."""
         lx = self._parse_float(self.light_x_entry, 2.0)
@@ -1825,6 +1862,7 @@ class App:
         self.material.color = np.array([r, g, b])
         self.redraw()
 
+    # ЛАБ 9.2 — Выбор и загрузка текстуры
     def change_texture(self):
         """Изменяет текущую текстуру."""
         self.current_texture = self.texture_combo.get()
@@ -1849,8 +1887,10 @@ class App:
 
     def rebuild_model(self):
         self.model = make_poly(self.poly_var.get())
+        self.fit_camera()
         self.redraw()
 
+    # ЛАБ 8.1 — Направление обзора
     def apply_view_vector(self):
         """Применяет новый вектор обзора из полей ввода."""
         vx = self._parse_float(self.view_x_entry, 0.0)
@@ -1865,6 +1905,7 @@ class App:
         except Exception:
             return default
 
+    # ЛАБ 6 — Обработчики преобразований
     def apply_translate(self):
         dx = self._parse_float(self.dx_entry, 0.0)
         dy = self._parse_float(self.dy_entry, 0.0)
@@ -1934,6 +1975,7 @@ class App:
         self.model.rotate_around_line(p1, p2, angle)
         self.redraw()
 
+    # ЛАБ 8.3 — Обработчики камеры
     def camera_orbit(self, direction_horizontal, direction_vertical):
         """Вращает камеру вокруг объекта."""
         azimuth = self._parse_float(self.cam_azimuth_entry, 10.0)
@@ -1946,10 +1988,38 @@ class App:
         self.update_camera_fields()
         self.redraw()
 
+    def _bounds(self):
+        pts = (self.model.V[:3] / self.model.V[3]).T
+        lo, hi = pts.min(axis=0), pts.max(axis=0)
+        return (lo + hi) / 2, max(float(np.linalg.norm(hi - lo)), 0.01)
+
+    def fit_camera(self):
+        center, diameter = self._bounds()
+        self.camera.reset(position=center + np.array([diameter * 1.05, diameter * .30,
+                                                      diameter * .60]), target=center)
+        self.update_camera_fields()
+
+    def start_drag(self, event):
+        self.drag = (event.x, event.y)
+
+    def drag_camera(self, event):
+        if self.drag is not None:
+            dx, dy = event.x - self.drag[0], event.y - self.drag[1]
+            self.drag = (event.x, event.y)
+            self.camera.orbit_rotate(-dx * .45, dy * .45)
+            self.update_camera_fields()
+            self.redraw()
+
     def camera_zoom(self, direction):
-        """Приближает или отдаляет камеру."""
-        zoom_step = self._parse_float(self.cam_zoom_entry, 0.5)
-        self.camera.zoom(direction * zoom_step)
+        radius = self.camera.orbit_radius
+        _, diameter = self._bounds()
+        min_radius = max(0.5, diameter * .65)
+        max_radius = diameter * 20.0
+        new_radius = float(np.clip(radius - direction * radius * .12,
+                                   min_radius, max_radius))
+        vec = normalize(self.camera.position - self.camera.target)
+        self.camera.orbit_radius = new_radius
+        self.camera.position = self.camera.target + vec * new_radius
         self.update_camera_fields()
         self.redraw()
 
@@ -1970,9 +2040,7 @@ class App:
         self.redraw()
 
     def camera_reset(self):
-        """Сбрасывает камеру в начальное положение."""
-        self.camera.reset(position=[0, 2, 5], target=[0, 0, 0])
-        self.update_camera_fields()
+        self.fit_camera()
         self.redraw()
 
     def update_camera_fields(self):
@@ -2037,6 +2105,8 @@ class App:
         P = self.get_poly()
         mode = self.proj_var.get()
         render_mode = self.render_mode.get()
+        if render_mode == 'texture':
+            ensure_texture_coordinates(P)
 
         # Обновляем aspect ratio камеры
         if W > 0 and H > 0:
@@ -2048,16 +2118,49 @@ class App:
         )
 
         # Преобразуем в пиксели
-        Xs, Ys = to_pixels(x, y, W, H, scale=120.0)
+        Xs = (x + 1.0) * W * 0.5
+        Ys = (1.0 - y) * H * 0.5
 
         if render_mode == 'wireframe':
             # Для каркасного режима рисуем как раньше
             for a, b in edges:
-                self.canvas.create_line(float(Xs[a]), float(Ys[a]), float(Xs[b]), float(Ys[b]), fill='#1f77b4')
+                coords = [Xs[a], Ys[a], Xs[b], Ys[b]]
+                if np.all(np.isfinite(coords)):
+                    self.canvas.create_line(*map(float, coords), fill='#1f77b4')
         else:
+            # ЛАБ 8.2 — Создание Z-буфера
             # Создаем z-буфер
             zbuffer = ZBuffer(W, H)
             zbuffer.clear()
+
+            # ЛАБ 9.1.2 — Согласование света, обзора и глубины для Фонга
+            if render_mode == 'phong':
+                if mode == 'camera':
+                    view_matrix = self.camera.get_view_matrix()
+                    depth_sign = -1.0
+                elif mode == 'perspective':
+                    view_matrix = self.camera.get_view_matrix()
+                    depth_sign = -1.0
+                else:
+                    view_matrix = Rx(35.264389682754654) @ Rz(45.0)
+                    depth_sign = -1.0
+
+                light_position = from_h(view_matrix @ to_h(self.light.position))
+                phong_light = Light(light_position, self.light.color, self.light.intensity)
+                visible_faces = []
+                for face in transformed_poly.faces:
+                    if len(face.indices) < 3 or face.normal is None:
+                        continue
+                    face_points = vertices_3d[:, face.indices]
+                    if mode in ('camera', 'perspective'):
+                        # Не проецируем грани, пересекающие плоскость камеры.
+                        if np.any(depth_sign * face_points[2] <= 1e-8):
+                            continue
+                        view_dir = -np.mean(face_points, axis=1)
+                    else:
+                        view_dir = np.array([0.0, 0.0, 1.0])
+                    if np.dot(face.normal, view_dir) > 0:
+                        visible_faces.append(face)
 
             # Рендерим все грани через z-буфер
             for face in visible_faces:
@@ -2066,8 +2169,19 @@ class App:
 
                 # Подготавливаем данные для грани
                 face_vertices_2d = [(float(Xs[i]), float(Ys[i])) for i in face.indices]
-                face_vertices_3d = [vertices_3d[:, i] for i in face.indices]
+                if render_mode != 'phong':
+                    # Глубина для текстуры и Гуро: меньшая положительная глубина ближе.
+                    if mode == 'isometric':
+                        depth_values = np.max(vertices_3d[2]) - vertices_3d[2] + 1.0
+                    else:
+                        depth_values = -vertices_3d[2]
+                    face_vertices_3d = [np.array([vertices_3d[0, i], vertices_3d[1, i], depth_values[i]])
+                                        for i in face.indices]
+                else:
+                    # Фонг Алёны получает исходные координаты камеры и свой depth_sign.
+                    face_vertices_3d = [vertices_3d[:, i] for i in face.indices]
 
+                # ЛАБ 9.1.1 — Отрисовка Гуро
                 if render_mode == 'gouraud':
                     # Вычисляем цвета вершин
                     vertex_colors = []
@@ -2098,144 +2212,53 @@ class App:
                         tri2_colors = [vertex_colors[0], vertex_colors[2], vertex_colors[3]]
                         rasterize_triangle_gouraud_zbuffer(zbuffer, tri2_2d, tri2_3d, tri2_colors)
 
+                # ЛАБ 9.1.2 — Отрисовка Фонга с туншейдингом
                 elif render_mode == 'phong':
-                    # Режим Фонга с туншейдингом:
-                    # 1. Интерполируем нормали между вершинами (метод Фонга)
-                    # 2. Применяем туншейдинг к каждому пикселю с интерполированной нормалью
-                    view_dir = np.array([0, 0, 1])  # Упрощенное направление взгляда
                     vertex_normals = face.vertex_normals if face.vertex_normals else [face.normal] * len(face.indices)
+                    rasterize_triangle_phong_zbuffer(
+                        zbuffer, face_vertices_2d, face_vertices_3d,
+                        vertex_normals, None, phong_light, self.material,
+                        depth_sign=depth_sign,
+                        perspective_correct=mode in ('camera', 'perspective')
+                    )
 
-                    if len(face.indices) == 3:
-                        rasterize_triangle_phong_zbuffer(zbuffer, face_vertices_2d, face_vertices_3d, vertex_normals,
-                                                         view_dir, self.light, self.material)
-                    elif len(face.indices) == 4:
-                        # Разбиваем четырехугольник на два треугольника
-                        tri1_2d = [face_vertices_2d[0], face_vertices_2d[1], face_vertices_2d[2]]
-                        tri1_3d = [face_vertices_3d[0], face_vertices_3d[1], face_vertices_3d[2]]
-                        tri1_normals = [vertex_normals[0], vertex_normals[1], vertex_normals[2]]
-                        rasterize_triangle_phong_zbuffer(zbuffer, tri1_2d, tri1_3d, tri1_normals, view_dir, self.light,
-                                                         self.material)
-
-                        tri2_2d = [face_vertices_2d[0], face_vertices_2d[2], face_vertices_2d[3]]
-                        tri2_3d = [face_vertices_3d[0], face_vertices_3d[2], face_vertices_3d[3]]
-                        tri2_normals = [vertex_normals[0], vertex_normals[2], vertex_normals[3]]
-                        rasterize_triangle_phong_zbuffer(zbuffer, tri2_2d, tri2_3d, tri2_normals, view_dir, self.light,
-                                                         self.material)
-
+                # ЛАБ 9.2 — Отрисовка текстуры
                 elif render_mode == 'texture':
                     texture = self.textures.get(self.current_texture)
                     view_dir = np.array([0, 0, 1])  # Направление взгляда для освещения
                     vertex_normals = face.vertex_normals if face.vertex_normals else [face.normal] * len(face.indices)
 
-                    # Генерируем текстурные координаты если их нет
-                    if not hasattr(face, 'tex_coords') or not face.tex_coords:
-                        # Генерируем текстурные координаты на основе локальной системы координат грани
-                        # Используем рёбра грани как базисные векторы для стабильности при поворотах
-                        if len(face.indices) >= 3:
-                            # Берем первую вершину как начало координат
-                            v0 = vertices_3d[:, face.indices[0]]
-                            
-                            # Первое ребро (от v0 к v1) - направление U
-                            v1 = vertices_3d[:, face.indices[1]]
-                            edge_u_raw = v1 - v0
-                            len_u = np.linalg.norm(edge_u_raw)
-                            
-                            if len_u < 1e-10:
-                                # Если первое ребро нулевое, используем запасной вариант
-                                edge_u = np.array([1.0, 0.0, 0.0])
-                                len_u = 1.0
-                            else:
-                                edge_u = edge_u_raw / len_u  # Нормализованный вектор для направления
-                            
-                            # Второе ребро (от v0 к v2) - направление V
-                            v2 = vertices_3d[:, face.indices[2]]
-                            edge_v_raw = v2 - v0
-                            
-                            # Ортогонализуем edge_v относительно edge_u (процесс Грама-Шмидта)
-                            # Проецируем edge_v_raw на edge_u и вычитаем проекцию
-                            proj_v_on_u = np.dot(edge_v_raw, edge_u) * edge_u
-                            edge_v_ortho = edge_v_raw - proj_v_on_u
-                            len_v = np.linalg.norm(edge_v_ortho)
-                            
-                            if len_v < 1e-10:
-                                # Если edge_v параллелен edge_u, используем нормаль грани
-                                face_normal = face.normal if face.normal is not None else np.array([0, 0, 1])
-                                # Находим вектор, перпендикулярный edge_u
-                                if abs(edge_u[0]) < 0.9:
-                                    temp = np.array([1.0, 0.0, 0.0])
-                                else:
-                                    temp = np.array([0.0, 1.0, 0.0])
-                                edge_v_ortho = np.cross(edge_u, temp)
-                                edge_v_ortho = edge_v_ortho - np.dot(edge_v_ortho, edge_u) * edge_u
-                                len_v = np.linalg.norm(edge_v_ortho)
-                                if len_v < 1e-10:
-                                    edge_v_ortho = np.cross(edge_u, face_normal)
-                                    len_v = np.linalg.norm(edge_v_ortho)
-                                    if len_v < 1e-10:
-                                        edge_v_ortho = np.array([0.0, 1.0, 0.0])
-                                        len_v = 1.0
-                            
-                            edge_v = edge_v_ortho / len_v  # Нормализованный вектор для направления
-                            
-                            # Теперь проецируем все вершины грани на локальную систему координат (edge_u, edge_v)
-                            tex_coords = []
-                            for vertex_idx in face.indices:
-                                vertex_pos = vertices_3d[:, vertex_idx]
-                                # Вектор от v0 к текущей вершине
-                                vec = vertex_pos - v0
-                                
-                                # Проецируем на edge_u и edge_v (используем нормализованные векторы)
-                                u = np.dot(vec, edge_u)
-                                v = np.dot(vec, edge_v)
-                                
-                                tex_coords.append([u, v])
-                            
-                            # Находим минимальные и максимальные значения для нормализации к [0, 1]
-                            tex_coords_array = np.array(tex_coords)
-                            min_u, min_v = np.min(tex_coords_array, axis=0)
-                            max_u, max_v = np.max(tex_coords_array, axis=0)
-                            
-                            range_u = max_u - min_u
-                            range_v = max_v - min_v
-                            
-                            # Избегаем деления на ноль
-                            if range_u < 1e-10:
-                                range_u = 1.0
-                            if range_v < 1e-10:
-                                range_v = 1.0
-                            
-                            # Нормализуем к [0, 1]
-                            for i in range(len(tex_coords)):
-                                tex_coords[i][0] = float((tex_coords[i][0] - min_u) / range_u)
-                                tex_coords[i][1] = float((tex_coords[i][1] - min_v) / range_v)
-                        else:
-                            # Для граней с менее чем 3 вершинами используем простые координаты
-                            tex_coords = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]][:len(face.indices)]
-                    else:
-                        tex_coords = [np.array(self.model.tex_coords[tc_idx], dtype=float) for tc_idx in
-                                      face.tex_coords]
+                    # ЛАБ 9.2 — Заранее назначенные UV-координаты вершин грани
+                    tex_coords = [
+                        np.asarray(transformed_poly.tex_coords[idx], dtype=float)
+                        for idx in face.tex_coords
+                    ]
 
                     if len(face.indices) == 3:
                         rasterize_triangle_textured_zbuffer(zbuffer, face_vertices_2d, face_vertices_3d, tex_coords,
-                                                            texture, vertex_normals, view_dir, self.light, self.material)
+                                                            texture, vertex_normals, view_dir, self.light, self.material,
+                                                            perspective=(mode != 'isometric'))
                     elif len(face.indices) == 4:
                         tri1_2d = [face_vertices_2d[0], face_vertices_2d[1], face_vertices_2d[2]]
                         tri1_3d = [face_vertices_3d[0], face_vertices_3d[1], face_vertices_3d[2]]
                         tri1_tex_coords = [tex_coords[0], tex_coords[1], tex_coords[2]]
                         tri1_normals = [vertex_normals[0], vertex_normals[1], vertex_normals[2]]
                         rasterize_triangle_textured_zbuffer(zbuffer, tri1_2d, tri1_3d, tri1_tex_coords, texture,
-                                                            tri1_normals, view_dir, self.light, self.material)
+                                                            tri1_normals, view_dir, self.light, self.material,
+                                                            perspective=(mode != 'isometric'))
 
                         tri2_2d = [face_vertices_2d[0], face_vertices_2d[2], face_vertices_2d[3]]
                         tri2_3d = [face_vertices_3d[0], face_vertices_3d[2], face_vertices_3d[3]]
                         tri2_tex_coords = [tex_coords[0], tex_coords[2], tex_coords[3]]
                         tri2_normals = [vertex_normals[0], vertex_normals[2], vertex_normals[3]]
                         rasterize_triangle_textured_zbuffer(zbuffer, tri2_2d, tri2_3d, tri2_tex_coords, texture,
-                                                            tri2_normals, view_dir, self.light, self.material)
+                                                            tri2_normals, view_dir, self.light, self.material,
+                                                            perspective=(mode != 'isometric'))
 
             # Отрисовываем z-буфер на canvas
             zbuffer.draw_to_canvas(self.canvas)
 
+    # ЛАБ 7.1 — Обработчики загрузки и сохранения OBJ
     def load_obj(self):
         """Загрузка модели из OBJ файла"""
         filename = filedialog.askopenfilename(
@@ -2249,6 +2272,7 @@ class App:
         if obj_model.load_from_file(filename):
             self.model = obj_model.polyhedron
             self.poly_var.set('(Загружено из OBJ)')
+            self.fit_camera()
             self.redraw()
             messagebox.showinfo("Успех", f"Модель успешно загружена из {filename}")
         else:
