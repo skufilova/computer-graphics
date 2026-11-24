@@ -320,7 +320,7 @@ class ScrollableFrame(ttk.Frame):
 # =========================================================================
 
 class OBJModel:
-    """Класс для работы с OBJ моделями на основе Polyhedron"""
+    """Класс для загрузки и сохранения OBJ моделей"""
 
     def __init__(self, polyhedron=None):
         self.polyhedron = polyhedron
@@ -341,21 +341,23 @@ class OBJModel:
                     if not parts:
                         continue
 
-                    if parts[0] == 'v':  # вершина
+                    if parts[0] == 'v':
+                        # Считываем координаты вершины
                         if len(parts) >= 4:
                             vertex = [float(parts[1]), float(parts[2]), float(parts[3])]
                             vertices.append(vertex)
 
-                    elif parts[0] == 'f':  # грань
+                    elif parts[0] == 'f':
+                        # Считываем индексы вершин грани
                         face = []
                         for part in parts[1:]:
-                            # Обработка формата vertex/texture/normal
                             vertex_index = part.split('/')[0]
                             if vertex_index:
-                                face.append(int(vertex_index) - 1)  # OBJ использует 1-based индексацию
+                                face.append(int(vertex_index) - 1)  # Из OBJ (с 1) в Python (с 0)
                         if len(face) >= 3:
                             faces.append(face)
 
+            # Создаём многогранник из полученных данных
             self.polyhedron = Polyhedron(vertices, faces)
             return True
 
@@ -372,17 +374,17 @@ class OBJModel:
             with open(filename, 'w') as file:
                 file.write("# OBJ файл\n")
 
-                # Запись вершин
+                # Получаем координаты вершин из однородных координат
                 vertices = self.polyhedron.V[:3, :] / self.polyhedron.V[3, :]
                 for i in range(vertices.shape[1]):
                     vertex = vertices[:, i]
                     file.write(f"v {vertex[0]:.6f} {vertex[1]:.6f} {vertex[2]:.6f}\n")
 
-                # Запись граней
+                # Записываем грани с индексацией OBJ (с 1)
                 for face in self.polyhedron.faces:
                     face_line = "f"
                     for vertex_index in face.indices:
-                        face_line += f" {vertex_index + 1}"  # OBJ использует 1-based индексацию
+                        face_line += f" {vertex_index + 1}"
                     file.write(face_line + "\n")
 
             return True
