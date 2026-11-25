@@ -476,9 +476,8 @@ class PolygonFace:
             self.normal = np.array([0.0, 0.0, 1.0])
             return
 
-        # Для выпуклых многогранников проверяем направление нормали относительно центра
+        
         if object_center is not None:
-            # Центр грани
             face_center = np.mean(vertices[:, self.indices], axis=1)
             # Вектор от центра объекта к центру грани
             outward = face_center - object_center
@@ -920,10 +919,10 @@ class Material:
 
     def __init__(self, color=(0.8, 0.8, 0.8), ambient=0.2, diffuse=0.7, specular=0.3, shininess=32.0):
         self.color = np.array(color, dtype=float)
-        self.ambient = ambient
-        self.diffuse = diffuse
-        self.specular = specular
-        self.shininess = shininess
+        self.ambient = ambient  # фоновый свет
+        self.diffuse = diffuse # рассеянный
+        self.specular = specular # зеркальный
+        self.shininess = shininess  # степень блеска
 
 
 # --------------------
