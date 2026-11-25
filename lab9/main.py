@@ -1065,6 +1065,7 @@ def create_gradient_texture(width=64, height=64):
         for x in range(width):
             r = int(255 * x / width)
             g = int(255 * y / height)
+            #b = int(255 * (1 - x / width))
             b = 128
             texture[y, x] = [r, g, b]
     # Переворачиваем по вертикали, чтобы v=0 соответствовал низу текстуры
@@ -1312,7 +1313,7 @@ def rasterize_triangle_textured_zbuffer(zbuffer, vertices_2d, vertices_3d, tex_c
         return
 
     (ax, ay), (bx, by), (cx, cy) = points
-    den = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy)
+    den = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy) #общий знаменатель
     if abs(den) < 1e-10:
         return
 
@@ -1329,7 +1330,7 @@ def rasterize_triangle_textured_zbuffer(zbuffer, vertices_2d, vertices_3d, tex_c
     # Перспективно-корректная интерполяция глубины
     z_region = zbuffer.buffer[y0:y1, x0:x1]
 
-    valid = (
+    valid = (#какие пиксели принадлежат треугольнику
         (w0 >= -1e-7) &
         (w1 >= -1e-7) &
         (w2 >= -1e-7)
@@ -1368,9 +1369,9 @@ def rasterize_triangle_textured_zbuffer(zbuffer, vertices_2d, vertices_3d, tex_c
     a, b, c = w0[visible], w1[visible], w2[visible]
     zv = z[visible]
 
-    # Перспективно-корректная интерполяция UV
+    # Перспективно интерполяция UV
     if perspective:
-    # Перспективно-корректная интерполяция
+    # Перспективно интерполяция
         u = (
             a * uv[0, 0] * inv_depth[0] +
             b * uv[1, 0] * inv_depth[1] +
@@ -1460,13 +1461,9 @@ def ensure_texture_coordinates(poly):
         if n < 3:
             continue
 
-        # Если OBJ уже содержит корректные UV, сохраняем их
+        # Проверяем, что у грани уже есть UV-координаты для всех вершин и их индексы существуют в общем списке
         if (
-            len(face.tex_coords) == n
-            and all(
-                0 <= idx < len(poly.tex_coords)
-                for idx in face.tex_coords
-            )
+            len(face.tex_coords) == n and all(0 <= idx < len(poly.tex_coords) for idx in face.tex_coords)
         ):
             continue
 
@@ -1496,7 +1493,7 @@ def ensure_texture_coordinates(poly):
                 for a in angles
             ]
 
-        face.tex_coords = []
+        face.tex_coords = []#индексов UV-координат текущей грани
 
         for coord in uv:
             index = len(poly.tex_coords)
