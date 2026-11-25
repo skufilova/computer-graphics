@@ -909,7 +909,7 @@ class Light:
     """Класс для представления источника света."""
 
     def __init__(self, position, color=(1.0, 1.0, 1.0), intensity=1.0):
-        self.position = np.array(position, dtype=float)
+        self.position = np.array(position, dtype=float)  #  положение света
         self.color = np.array(color, dtype=float)
         self.intensity = intensity
 
@@ -936,8 +936,8 @@ def lambert_shading(normal, light_dir, material, light):
     # Косинус угла между нормалью и направлением к свету
     cos_theta = max(0.0, np.dot(normal, light_dir))
 
-    # Диффузная составляющая
-    diffuse = material.diffuse * cos_theta
+    # сколько света реально видно от этой точки
+    diffuse = material.diffuse * cos_theta #material.diffuse — насколько поверхность отражает свет
 
     # Цвет с учетом освещения
     ambient_color = material.ambient * material.color
@@ -1159,23 +1159,23 @@ def rasterize_triangle_gouraud_zbuffer(zbuffer, vertices_2d, vertices_3d, vertex
         return
 
     # Сетка центров пикселей
-    yy, xx = np.mgrid[y0:y1, x0:x1]
+    yy, xx = np.mgrid[y0:y1, x0:x1]   # сетка только внутри рамки
     px = xx + 0.5
     py = yy + 0.5
 
     # Барицентрические веса сразу для всех пикселей
-    w0 = ((by - cy) * (px - cx) + (cx - bx) * (py - cy)) / den
-    w1 = ((cy - ay) * (px - cx) + (ax - cx) * (py - cy)) / den
+    w0 = ((by - cy) * (px - cx) + (cx - bx) * (py - cy)) / den #S(BCP)/S(ABC)
+    w1 = ((cy - ay) * (px - cx) + (ax - cx) * (py - cy)) / den 
     w2 = 1.0 - w0 - w1
-
+    #Пиксель принадлежит треугольнику, если все три веса ≥ 0.
     inside = (w0 >= -1e-7) & (w1 >= -1e-7) & (w2 >= -1e-7)
     if not np.any(inside):
         return
 
-    # Интерполяция глубины
+    #Глубина каждого пикселя = взвешенная смесь глубин трёх вершин
     z = w0 * verts[0, 2] + w1 * verts[1, 2] + w2 * verts[2, 2]
 
-    # Интерполяция цвета (Гуро)
+    # Интерполяция цвета (Гуро) Цвет пикселя = смесь цветов трёх вершин по весам.
     color = (w0[..., None] * colors[0] +
              w1[..., None] * colors[1] +
              w2[..., None] * colors[2])
